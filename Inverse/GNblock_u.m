@@ -29,7 +29,14 @@ if nargin < 6
     tag_str = '';
 end
 
-phi          = get_phi(Rho_i,u,nt,dt,par);
+% --- MODIFICATION: Initialize history arrays ---
+loss_history.mk = [];
+loss_history.phiN = [];
+loss_history.Ru = [];
+loss_history.total = [];
+% --- END MODIFICATION ---
+
+[phi, ~, ~, ~] = get_phi(Rho_i,u,par); % Use ~ to ignore unused outputs
 A            = kron(ones(1,par.dim),speye(prod(par.n)));
 Abig         = kron(speye(nt),A);
 flag         = 0;
@@ -83,32 +90,86 @@ for i = 1:par.maxUiter
     while 1
         ut   = u(:) + muls*s;
         
-        phit = get_phi(Rho_i,ut,nt,dt,par);
+        [phit, mk_t, phiN_t, Ru_t] = get_phi(Rho_i,ut,par);
         
         fprintf('%3d.%d\t      %3.2e \t     phit  = %3.2e        %s\n',i,lsiter,phi,phit,tag_str);
         
         % test for line search termination
-        if phit < phi + 1e-8*s'*g%1e-8*s'*g
+        if phit < phi + 1e-4*s'*g%1e-4*s'*g
             break;                      %breaks while loop entirely (and goes to next statement after end of while loop)
         end
         muls = muls/2; lsiter = lsiter+1;
         
         % fail if lsiter is too large
-        if lsiter > 4
+        if lsiter > 10
             fprintf('LSB\n');
             ut = u;     
             flag = 1;    
-            return;                     % returns and exits function
+            break; % Use break instead of return to allow saving history
         end
     end
     
+    % --- MODIFICATION: Record the loss components from the successful step ---
+    loss_history.mk(end+1) = mk_t;
+    loss_history.phiN(end+1) = phiN_t;
+    loss_history.Ru(end+1) = Ru_t;
+    loss_history.total(end+1) = phit;
+    % --- END MODIFICATION ---
+
     if flag
-        return; 
-    end                % returns and exits function
+        break; % Use break instead of return
+    end
     u   = ut;
     phi = phit;
     
 end
+
+% --- MODIFICATION: Visualize loss history in subplots and save the figure ---
+fig = figure('Visible', 'off', 'Name', 'Loss History');
+
+% Subplot 1: MKdist Term
+subplot(3, 1, 1);
+plot(loss_history.mk, 'b-o');
+title('MKdist Term (mk)');
+ylabel('Loss');
+grid on;
+axis tight;
+set(gca, 'YScale', 'log');
+
+% Subplot 2: Image Mismatch Term
+subplot(3, 1, 2);
+plot(loss_history.phiN, 'r-o');
+title('Image Mismatch Term (phiN)');
+ylabel('Loss');
+grid on;
+axis tight;
+set(gca, 'YScale', 'log');
+
+% Subplot 3: Regularization Term
+subplot(3, 1, 3);
+plot(loss_history.Ru, 'g-o');
+title('Regularization Term (Ru)');
+xlabel('Optimization Step');
+ylabel('Loss');
+grid on;
+axis tight;
+set(gca, 'YScale', 'log');
+
+% Add a main title
+sgtitle(sprintf('Loss Components During Optimization: %s', tag_str), 'Interpreter', 'none');
+
+% Create the output directory for loss plots if it doesn't exist
+loss_plot_dir = fullfile(par.out_dir, 'loss');
+if ~exist(loss_plot_dir, 'dir')
+    mkdir(loss_plot_dir);
+end
+
+% Save the figure
+saveas(fig, fullfile(loss_plot_dir, sprintf('loss_curve_%s.png', tag_str)));
+close(fig);
+
+% --- END MODIFICATION ---
+
 end
 
 

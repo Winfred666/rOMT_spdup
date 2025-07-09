@@ -7,15 +7,15 @@ fprintf('_________________________________________________________\n\n')
 tag = cfg.tag;
 
 %%
-formatOut = 'mmddyy';
-date_str = datestr(now,formatOut);
+formatOut = 'MMddyy';
+date_str = string(datetime('now'), formatOut);;
 
 % get GLAD parameters
 glacfg = paramInitGLADpar(cfg);
 
 % set usefule variables:
 nt = cfg.nt;
-n = cfg.true_size;
+n = cfg.true_size;  % IMPORTANT : true_size has already been resize.
 ti = cfg.first_time;
 tf = cfg.last_time;
 tj = cfg.time_jump;
@@ -26,15 +26,35 @@ sig_str = cfg.sig_str;
 msk = cfg.msk;
 mskSP = msk;
 
+% only display the data within brain mask
+% WARNING: this mask has three level: 0 for outside, 1 for inside view, 3 for brain
+sp_ind = find(strcmp('brain',{cfg.sp_mask_opts(:).name}));
+if isempty(sp_ind)
+    fprintf('No brain mask found in cfg.sp_mask_opts, using the whole mask.\n');
+    msk_brain = msk>0; % use the whole mask
+else
+    mskROI = nii2mat(cfg.sp_mask_opts(sp_ind).path,cfg.x_range,cfg.y_range,cfg.z_range);
+    msk_brain = mskROI>0; % warning: in sp_mask, brain area is bigger than 1, however when now we set it as label mask.
+    if cfg.do_resize
+        msk_brain = resizeMatrix(double(msk_brain),round(cfg.size_factor.*size(msk_brain)),'linear');
+        msk_brain(msk_brain~=1) = 0; % make sure it is binary
+    end
+    cfg.msk_brain = msk_brain; % only for visualize and debug.
+end
+
 if glacfg.do_sp
     data_max = zeros(size(cfg.vol(1).data));
     for l = 1:length(cfg.vol)
-        data_max = data_max + cfg.vol(l).data;
+        data_max = max(data_max,cfg.vol(l).data);
     end
-    if cfg.do_resize
-       data_max = resizeMatrix(data_max,round(cfg.size_factor.*size(data_max)),'linear');
-    end
-    mind = find((mskSP>0) & (data_max>glacfg.sp_thresh));
+    % do not repeatedly do downsampling.
+    % if cfg.do_resize
+    %    data_max = resizeMatrix(data_max,round(cfg.size_factor.*size(data_max)),'linear');
+    % end
+    max_signal_in_mask = max(data_max(mskSP > 0 & msk_brain > 0));
+    relative_threshold = glacfg.sp_thresh * max_signal_in_mask;
+    fprintf('Using relative threshold for starting points: %.4f (%.2f%% of max signal %.4f)\n', relative_threshold, glacfg.sp_thresh * 100, max_signal_in_mask);
+    mind = find((mskSP>0) & (data_max>relative_threshold));
     glacfg.do_sp_str = sprintf('_data_min_%d',glacfg.sp_thresh);
 else
     mind = find(mskSP>0);
@@ -93,6 +113,12 @@ sp_123 = [s1,s2,s3];
 pcur = sp_123; %current point i.e. list of current location in each streamline that hasn't been terminated
 npoints = length(pcur); %keep track of the # of streamlines that have not yet been terminated 
 
+fprintf("start point number for pathline: %d .", npoints)
+fprintf('Starting Point Distribution:\n');
+fprintf('X range: [%.2f, %.2f]\n', min(sx), max(sx));
+fprintf('Y range: [%.2f, %.2f]\n', min(sy), max(sy));
+fprintf('Z range: [%.2f, %.2f]\n', min(sz), max(sz));
+
 SL = cell(1,nsp);
 RHO_SL = cell(1,nsp);
 AUGSPD_SL = cell(1,nsp);
@@ -141,7 +167,7 @@ for t1 = ti:tj:tf
         else
             RHO = load(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,t1-tj,t1,(t1-ti)./tj));
         end
-        RHO = RHO.rho_n;
+        RHO = RHO.rho_n; % load target.
         if nt > 1
             RHO_t = [RHO, advecDiff(RHO,U(:),nt,cfg.dt,cfg)];
         else
@@ -149,7 +175,7 @@ for t1 = ti:tj:tf
         end
     end
     
-    for t2 = 1:nt
+    for t2 = 1:nt % integral from 1 to nt along t2.
         TIND = ((t1 - ti)/tj)*nt + t2;
         T = t1+(t2-1)*(tj/nt);
         fprintf('t = %d (t1 = %d, t2 = %d -> T = %.3f)\n',TIND,t1,t2,T);
@@ -385,20 +411,10 @@ for k = 1:glacfg.sfs:length(pl_cur)
 end
 
 if glacfg.do_masked
-    s(~msk) = 0;
+    s(~msk) = 0; % basic mask.
 end
-% only save within brain mask
-sp_ind = find(strcmp('brain',{cfg.sp_mask_opts(:).name}));
-mskROI = nii2mat(cfg.sp_mask_opts(sp_ind).path,cfg.x_range,cfg.y_range,cfg.z_range);
-msk_brain = mskROI>1;
-if cfg.do_resize
-    msk_brain = resizeMatrix(double(msk_brain),round(cfg.size_factor.*size(msk_brain)),'linear');
-    msk_brain(msk_brain~=1) = 0;
-    s(msk_brain==0) = 0;
-else
 
-    s(msk_brain==0) = 0;
-end
+s(msk_brain==0) = 0;
 
 % save
 save(sprintf('%s/%s/%s_LagSpeed_E%02d_%02d_%s_%s.mat',cfg.out_dir,outdir,cfg.tag,ti,tf+tj,paper_fig_str,date_str),'s');

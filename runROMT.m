@@ -13,9 +13,10 @@ end
 
 rho_n = cfg.vol(1).data(:);
 
-if ~exist(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'file')
-    save(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'rho_n');
-end
+% if ~exist(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'file')
+% Always save rho_n no matter how.
+save(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'rho_n');
+% end
 
 fprintf('\n =============== rOMT Starts ===============\n')
 fprintf('______________________________________________\n\n')
@@ -59,7 +60,7 @@ for tind = 1:length(cfg.first_time:cfg.time_jump:cfg.last_time)
     [u,phi,dphi] = GNblock_u(rho_0,u,par.nt,par.dt,par);
     
     
-    [phi,mk,phiN,Rho,Ru]  = get_phi(rho_0,u,par.nt,par.dt,par);
+    [phi,mk,phiN,Rho,Ru]  = get_phi(rho_0,u,par);
     rho_n = Rho(:,end);
     btoc = toc;
     T = T + btoc;
@@ -74,7 +75,9 @@ end
 fprintf('\n =============== rOMT Ends ===============\n')
 fprintf('\n Elapsed Time: %s\n',datestr(seconds(T),'HH:MM:SS'))
 
+if usejava("desktop")
 profile viewer
+end
 profile off
 
 flag = 1;

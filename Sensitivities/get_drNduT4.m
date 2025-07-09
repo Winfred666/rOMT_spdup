@@ -12,7 +12,7 @@ sensTx             = zeros(par.dim*prod(n),nt);
 sens               = y;
 
 for i = nt:-1:1
-    % Sensitivity:          
+    % Sensitivity VJP:          
     [sensI,pcgflag1]   = pcg(par.B',sens);
     if pcgflag1 ~= 0
         warning('MATLAB:pcgExitFlag','Warning: get_drNduT4.m >>> while finding drho_%dT/du, pcg exit flag1 = %d',i,pcgflag1)

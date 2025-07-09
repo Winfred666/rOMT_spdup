@@ -2,10 +2,9 @@
 % parameters of rOMT is defined in getPamams.m
 
 addpath('utilities', 'Sensitivities','Inverse');
-
 tag = 'gaussian3';
 
-%%
+%% 
 % get parameters and set directories
 [ppar,dpar,mpar] = getParams(tag);
 
@@ -110,7 +109,7 @@ for tind = 1:length(dpar.first_time:dpar.time_jump:dpar.last_time)
     [u,phi,dphi] = GNblock_u(rho_0,u,par.nt,par.dt,par);
     
     
-    [phi,mk,phiN,Rho,Ru]  = get_phi(rho_0,u,par.nt,par.dt,par);
+    [phi,mk,phiN,Rho,Ru]  = get_phi(rho_0,u,par);
     rho_n = Rho(:,end);
     btoc = toc;
     T = T + btoc;

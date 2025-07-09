@@ -36,9 +36,9 @@ if length(varargin{2}) == 1 && nargin >= 3 && length(varargin{3}) == 1
     
     % recursively call resize with the correct inputs
     if nargin == 3
-        mat_rs = resizeMatrix(varargin{1}, [varargin{2}, varargin{3}]);
+        mat_rs = resizeMatrix(double(varargin{1}), [varargin{2}, varargin{3}]);
     else
-        mat_rs = resizeMatrix(varargin{1}, [varargin{2}, varargin{3}], varargin{4});
+        mat_rs = resizeMatrix(double(varargin{1}), [varargin{2}, varargin{3}], varargin{4});
     end
     return
     
@@ -48,7 +48,7 @@ end
 disp('Resizing matrix...');
 
 % assign the matrix input
-mat = varargin{1};
+mat = double(varargin{1});
 
 % check for interpolation mode input
 if nargin == 2

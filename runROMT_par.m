@@ -69,6 +69,7 @@ parfor (tind = 1:length(cfg.first_time:cfg.time_jump:cfg.last_time),2)
 =======
 % remove the worker limit to leverage more cores
 global_steps = length(cfg.first_time:cfg.time_jump:cfg.last_time);
+% DEBUG: change parfor to for if any problem inside.
 for tind = 1:global_steps
 >>>>>>> 9749637 (init)
     fprintf('tind = %d\n',tind)
@@ -126,7 +127,7 @@ for tind = 1:global_steps
 =======
     [u,~,~] = GNblock_u(rho_0,u,par.nt,par.dt,par, sprintf("f_%d_%d",cfg.first_time + tind*cfg.time_jump, cfg.first_time + (tind+1)*cfg.time_jump));
     
-    [phi,mk,phiN,Rho,Ru]  = get_phi(rho_0,u,par);
+    [phi,mk,phiN,Ru, Rho]  = get_phi(rho_0,u,par);
     fprintf('________    ###########     __________________\n')
     rho_n = Rho(:,end);
     btoc = toc;

@@ -1,15 +1,18 @@
 clear all;
 clc;
 
+addpath(genpath('./nii_preprocess'))
+
+
 fprintf('1. Format images for Jean Logan \n' );
 fprintf('2. Multiply image resolution (*v files*)\n' );
-fprintf('3. Realign images with the mean image (*r files*) \n' );
-fprintf('4. Sum images \n' );
-fprintf('5. Normalize and smooth images (*sn files*)\n' );
+fprintf('3. (Necessary) Realign images with the mean image (*r files*) \n' ); % a must, correct head motions
+fprintf('4. Sum images \n' ); % only needed if want to created mean baseline image (however done in 7)
+fprintf('5. (Necessary) Normalize and smooth images (*sn files*)\n' ); % reducing noise and variability in the data.
 fprintf('6. Merge all the images to check normalization quality\n' );
-fprintf('7. Convert images to percent images.\n' );
+fprintf('7. (Necessary) Convert images to percent images.\n' ); % core step for DCE-MRI analysis, converting the signal intensity changes to percentage changes relative to the baseline
 fprintf('8. Re-format images for saggital orientation.\n' );
-fprintf('9. Normlize brain.\n' );
+fprintf('9. Normalize brain.\n' ); % usually warp ATLS, this individual warp is for certain brain damaged rats or mouse.
 
 run_N=input('Enter the numer:');
 

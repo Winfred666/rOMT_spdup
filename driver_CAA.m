@@ -5,11 +5,8 @@ addpath('./Inverse','./Sensitivities','./analyzeFlows',genpath('./utilities'))
 
 %% set directories and parameters
 
-if exist('config_label', 'var') && strcmp(config_label, "ori")
-    cfg = set_config_CAA_ori(); % Load configuration from function
-else
-    cfg = set_config_CAA(); % Load configuration from function
-end
+
+cfg = set_config_CAA(); % Load configuration from function
 
 % load ROI
 if cfg.do_ROI_msk

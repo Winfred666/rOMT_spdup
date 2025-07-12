@@ -117,7 +117,7 @@ for i = 1:par.maxUiter
     % --- END MODIFICATION ---
 
     if flag
-        break; % Use break instead of return
+        break; % Use break instead of return (must leave an LSB output)
     end
     u   = ut;
     phi = phit;
@@ -130,29 +130,32 @@ fig = figure('Visible', 'off', 'Name', 'Loss History');
 % Subplot 1: MKdist Term
 subplot(3, 1, 1);
 plot(loss_history.mk, 'b-o');
+% set clim the max and min of loss
+ylim([min(loss_history.mk)*0.9-0.1, max(loss_history.mk)*1.1]);
+
 title('MKdist Term (mk)');
 ylabel('Loss');
 grid on;
-axis tight;
 set(gca, 'YScale', 'log');
 
 % Subplot 2: Image Mismatch Term
 subplot(3, 1, 2);
 plot(loss_history.phiN, 'r-o');
+ylim([min(loss_history.phiN)*0.9-0.1, max(loss_history.phiN)*1.1]);
+
 title('Image Mismatch Term (phiN)');
 ylabel('Loss');
 grid on;
-axis tight;
 set(gca, 'YScale', 'log');
 
 % Subplot 3: Regularization Term
 subplot(3, 1, 3);
 plot(loss_history.Ru, 'g-o');
+ylim([min(loss_history.Ru)*0.9-0.1, max(loss_history.Ru)*1.1]);
 title('Regularization Term (Ru)');
 xlabel('Optimization Step');
 ylabel('Loss');
 grid on;
-axis tight;
 set(gca, 'YScale', 'log');
 
 % Add a main title

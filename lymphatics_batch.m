@@ -3,102 +3,145 @@ clc;
 
 addpath(genpath('./nii_preprocess'))
 
+% --- CONFIGURATION ---
+% Load parameters from the config file, after all preprocess, load psnr_... in set_config_CAA.m
+lymph = struct();
+lymph.run_Ns = [3,5,7]; % processing steps to run
+% lymph.src = '/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/data/ours/test1/total_src.txt'; % source image
+dataset = 'ISO';
+dataset_num = '52';
+lymph.src = sprintf('/data/xym/DEX_MRI/%s/%s_%s/src_total.txt', dataset,dataset,dataset_num);
+% dst is only for some log files.
+% lymph.dst = '/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/data/ours/test1/DCE_nii_preprocess_log'; % destination directory
+lymph.dst = sprintf('/data/xym/DEX_MRI/%s/%s_%s/DCE_nii_preprocess_log', dataset, dataset, dataset_num);
+% mask for brain (still the same), used in normalization range.
+lymph.msk = sprintf('/data/xym/DEX_MRI/%s/Template_C57Bl6_n30_brain_%s_%s.nii', dataset, dataset, dataset_num);
 
-fprintf('1. Format images for Jean Logan \n' );
-fprintf('2. Multiply image resolution (*v files*)\n' );
-fprintf('3. (Necessary) Realign images with the mean image (*r files*) \n' ); % a must, correct head motions
-fprintf('4. Sum images \n' ); % only needed if want to created mean baseline image (however done in 7)
-fprintf('5. (Necessary) Normalize and smooth images (*sn files*)\n' ); % reducing noise and variability in the data.
-fprintf('6. Merge all the images to check normalization quality\n' );
-fprintf('7. (Necessary) Convert images to percent images.\n' ); % core step for DCE-MRI analysis, converting the signal intensity changes to percentage changes relative to the baseline
-fprintf('8. Re-format images for saggital orientation.\n' );
-fprintf('9. Normalize brain.\n' ); % usually warp ATLS, this individual warp is for certain brain damaged rats or mouse.
+lymph.print = 'n'; % visualize and print image.
+lymph.smooth = 0.125 * 12; % smoothing kernel size in mm unit, 2-3 times the voxel size is recommended
+lymph.SL = 1; % slice number if want to print image after normalize + smooth
 
-run_N=input('Enter the numer:');
+% if there is no *.nii but only *.nii.gz files in src, use gunzip to unpack all *.gz
+fileID = fopen(lymph.src, 'r');
+if fileID == -1
+    error('Cannot open source file: %s', lymph.src);
+end
+file_list = textscan(fileID, '%s', 'Delimiter', '\n');
+fclose(fileID);
+file_list = file_list{1};
 
-switch lower(run_N)
-    case {1}
-        lymph.src=input('Enter the source directory: ','s');
-        lymph.dst=input('Enter the destination directory: ','s');
-        lymph.resol=input('Cut image resolution by half ? (ex:y or n): ','s');
-        lymphatics_JL_images(lymph.src,lymph.dst,lymph.resol);
-    case {2}
-        lymph.species=input('Enter the species 1.Rat (x10) 2.Mouse (x20): '); %4/3/18
-        lymph.src=input('Enter the source files(ex:/060112A/Magnevist_060112A_E9.nii): ','s');
-        lymph.dst=input('Enter the output files(ex:/060112A/v_Magnevist_060112A_E9.nii): ','s');
-        lymph.src_loc=textread(lymph.src,'%s');
-        lymph.dst_loc=textread(lymph.dst,'%s');
-        lymphatics_resize_image(lymph);
-    case {3}
-        lymph.src=input('Enter the src file (always align all image with the mean): ','s');
-        lymph.dst=input('Enter the destination directory to save the batch file: ','s');
-        lymph.src_loc=textread(lymph.src,'%s');
-        lymphatics_realign_image(lymph);
-    case {4}
-        lymph.src=input('Enter the source files(ex:src.txt): ','s');
-        lymph.dst=input('Enter the output file name(ex:/060112A/mean.nii): ','s');
-        lymph.src_loc=textread(lymph.src,'%s');
-        lymph.dst_loc=lymph.dst;
-        lymphatics_sum_image(lymph);
-    case {5}
-        lymph.src=input('Enter the source files(ex:list.txt): ','s');
-        lymph.msk=input('Enter the mask image for NORMALIZATION(ex:img_msk.nii): ','s');
-        lymph.smooth=input('Enter smoothing kernel in mm (ex:1): ');
-        lymph.dst=input('Enter the destination directory(ex:/060112A): ','s');
-        %Added on 03/20/17
-        lymph.print=input('Save output as png ?(y or n): ','s');
-        if strcmp(lymph.print,'y')
-            lymph.SL=input('Enter the slice number for print out(135 works well): ');
+file_updated = false; % Flag to check if the file needs to be rewritten
+
+% Iterate over the list of files to find and unzip .nii.gz
+for k = 1:length(file_list)
+    current_file = file_list{k};
+    if endsWith(current_file, '.nii.gz')
+        fprintf('Unzipping: %s\n', current_file);
+        try
+            gunzip(current_file);
+            file_list{k} = erase(current_file, '.gz'); % Update path in list
+            file_updated = true;
+        catch ME
+            warning('Could not unzip file: %s. Error: %s', current_file, ME.message);
         end
-        lymph.src_loc=textread(lymph.src,'%s');
-        lymphatics_normalize_smooth_images(lymph);
-    case {6}
-        lymph.src=input('Enter the source files(ex:list.txt): ','s');
-        lymph.dst=input('Enter the output file name(ex:/060112A/all): ','s');
-        %Added on 03/20/17
-        lymph.resol=input('Cut the spatial resolution half ?(y or n): ','s');
-        
-        lymph.src_loc=textread(lymph.src,'%s');
-        lymph.dst_loc=lymph.dst;
-        lymphatics_merge_image(lymph);
-    case {7}
-        lymph.src=input('Enter the source files(ex:list.txt): ','s');
-        lymph.bas=input('Enter the baseline image file (ex:list.txt): ','s');
-        lymph.src_loc=textread(lymph.src,'%s');
-        lymph.bas_loc=textread(lymph.bas,'%s');
-        lymphatics_percent_image(lymph);
-    case {8}
-        lymph.src=input('Enter the source file to calculate coreg (ex:src.img): ','s');
-        lymph.modal=input('1.Adult_Rat 2.Baby_Rat 3.Prone 4. lateral 5. NIDA supine (Enter number): ');
-        %lymph.ref=input('Enter the reference file  (ex:img_ref.img): ','s');
-        
-        if lymph.modal==1
-        lymph.ref='/usr/local/matcodes/spm12_batch/Lymphatics_Prj/070912_template/pbase_snrv_Gadospin_062912A_E40.img';
-        end
-        if lymph.modal==2
-        lymph.ref='/usr/local/matcodes/spm12_batch/Lymphatics_Prj/032613_baby_template/rrpbase_snrv_Magnevist_23_E65_032613.img';
-        end
-        if lymph.modal==3
-        lymph.ref='/usr/local/matcodes/spm12_batch/Lymphatics_Prj/071714_Prone_template/rpbase_snrv_Magnevist_40_water_Cistern_prone_E50_071714A.img';
-        end        
-        if lymph.modal==4
-        lymph.ref='/usr/local/matcodes/spm12_batch/Lymphatics_Prj/082014_Lateral_template/rpbase_snrv_Magnevist_40_water_Cistern_lateral_E71_082014A.img';
-        end
-        if lymph.modal==5
-        lymph.ref='/usr/local/matcodes/spm12_batch/Lymphatics_Prj/072815_supine_template/rpbase_snrv_Magnevist_40_water_cistern_supine_NIDA_E55_072115B.nii';
-        end
-        
-        lymph.oth=input('Enter the other file to apply the coregistration paramter (ex:other.txt): ','s');
-        
-        [lymph.dst lymph.tmp]=fileparts(lymph.src);
-        
-        lymph.oth_loc=textread(lymph.oth,'%s');
-        lymphatics_realign_sagittal_image(lymph);
-    case {9}  
-        lymphatics_warp_batch;
-    otherwise
-        disp('Unknown option.')
+    end
 end
 
+% if dst not exist , just create it
+if ~exist(lymph.dst, 'dir')
+    mkdir(lymph.dst);
+    fprintf('Created destination directory: %s\n', lymph.dst);
+end
+
+% If any files were unzipped, rewrite the source file with the updated .nii paths
+if file_updated
+    fprintf('Rewriting source file with updated .nii paths: %s\n', lymph.src);
+    fileID = fopen(lymph.src, 'w');
+    if fileID == -1
+        error('Cannot open source file for writing: %s', lymph.src);
+    end
+    fprintf(fileID, '%s\n', file_list{:});
+    fclose(fileID);
+    fprintf('Source file updated successfully.\n');
+end
+
+
+% --------- PROCESSING STEPS ---------
+
+for i = 1:length(lymph.run_Ns)
+    switch lower(lymph.run_Ns(i))
+        case {1}
+            fprintf('1. Format images for Jean Logan \n' );
+            lymphatics_JL_images(lymph.src, lymph.dst, lymph.resol);
+        case {2}
+            fprintf('2. Multiply image resolution (*v files*)\n' );
+            lymph.src_loc = textread(lymph.src, '%s');
+            lymph.dst_loc = textread(lymph.dst_list, '%s');
+            lymphatics_resize_image(lymph);
+        case {3}
+            fprintf('3. (Necessary) Realign images with the mean image (*r files*) \n' ); % a must, correct head motions
+            lymph.src_loc = textread(lymph.src, '%s');
+            lymphatics_realign_image(lymph);
+        case {4}
+            fprintf('4. Sum images \n' ); % only needed if want to created mean baseline image (however done in 7)
+            lymph.src_loc = textread(lymph.src, '%s');
+            lymph.dst_loc = lymph.dst;
+            lymphatics_sum_image(lymph);
+        case {5}
+            fprintf('5. (Necessary) Normalize and smooth images (*sn files*)\n' ); % reducing noise and variability in the data.
+            lymph.src_loc = textread(lymph.src, '%s');
+            % read the output from realigned images, adding 'r' to every filename in src_loc
+            for j = 1:length(lymph.src_loc)
+                [fdir, fname] = fileparts(lymph.src_loc{j});
+                lymph.src_loc{j} = fullfile(fdir, ['r', fname, '.nii']);
+            end
+            lymphatics_normalize_smooth_images(lymph);
+        case {6}
+            fprintf('6. Merge all the images to check normalization quality\n' );
+            lymph.src_loc = textread(lymph.src, '%s');
+            lymph.dst_loc = lymph.dst;
+            lymphatics_merge_image(lymph);
+        case {7}
+            fprintf('7. (Necessary) Convert images to percent images.\n' ); % core step for DCE-MRI analysis, converting the signal intensity changes to percentage changes relative to the baseline
+            lymph.src_loc = textread(lymph.src, '%s');
+
+            % read output from smoothed images, add 'sn' to every filename in src_loc
+            for j = 1:length(lymph.src_loc)
+                [fdir, fname] = fileparts(lymph.src_loc{j});
+                lymph.src_loc{j} = fullfile(fdir, ['snr', fname, '.nii']);
+            end
+
+            % filter files in src_loc list that include "baseline" into bas_loc
+            baseline_idxs = contains(lymph.src_loc, 'baseline');
+            
+            lymph.bas_loc = lymph.src_loc(baseline_idxs);
+            lymph.src_loc = lymph.src_loc(~baseline_idxs);
+            
+            % lymph.bas_loc = textread(lymph.bas, '%s');
+            lymphatics_percent_image(lymph);
+        case {8}
+            fprintf('8. Re-format images for saggital orientation.\n' );
+            if lymph.modal == 1
+                lymph.ref = '/usr/local/matcodes/spm12_batch/Lymphatics_Prj/070912_template/pbase_snrv_Gadospin_062912A_E40.img';
+            elseif lymph.modal == 2
+                lymph.ref = '/usr/local/matcodes/spm12_batch/Lymphatics_Prj/032613_baby_template/rrpbase_snrv_Magnevist_23_E65_032613.img';
+            elseif lymph.modal == 3
+                lymph.ref = '/usr/local/matcodes/spm12_batch/Lymphatics_Prj/071714_Prone_template/rpbase_snrv_Magnevist_40_water_Cistern_prone_E50_071714A.img';
+            elseif lymph.modal == 4
+                lymph.ref = '/usr/local/matcodes/spm12_batch/Lymphatics_Prj/082014_Lateral_template/rpbase_snrv_Magnevist_40_water_Cistern_lateral_E71_082014A.img';
+            elseif lymph.modal == 5
+                lymph.ref = '/usr/local/matcodes/spm12_batch/Lymphatics_Prj/072815_supine_template/rpbase_snrv_Magnevist_40_water_cistern_supine_NIDA_E55_072115B.nii';
+            end
+            
+            [lymph.dst, ~] = fileparts(lymph.src);
+            lymph.oth_loc = textread(lymph.oth, '%s');
+            lymphatics_realign_sagittal_image(lymph);
+        case {9}  
+            fprintf('9. Normalize brain.\n' ); % usually warp ATLS, this individual warp is for certain brain damaged rats or mouse.
+            lymphatics_warp_batch;
+        otherwise
+            disp('Unknown option.')
+    end
+end
 
 

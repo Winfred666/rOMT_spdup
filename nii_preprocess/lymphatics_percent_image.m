@@ -2,7 +2,7 @@ function lymphatics_percent_image(lymph)
 
 
 
-%Create mean image based no the baseline
+%Create mean image based on the baselines 
 for FN=1:size(lymph.bas_loc,1)
     clear v img;
 

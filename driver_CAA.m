@@ -5,13 +5,16 @@ addpath('./Inverse','./Sensitivities','./analyzeFlows',genpath('./utilities'))
 
 %% set directories and parameters
 
+if ~exist('config_tag', 'var')
+    config_tag = 'ours_test1'; % default label, could be changed to "C294" for C294 dataset.
+end
 
-cfg = set_config_CAA(); % Load configuration from function
+cfg = set_config_CAA(config_tag); % Load configuration from function
 
 % load ROI
 if cfg.do_ROI_msk
     tmp = nii2mat(cfg.ROI_msk_path,cfg.x_range,cfg.y_range,cfg.z_range);
-    cfg.msk = tmp>0;
+    cfg.msk = tmp>1e-4; % WARNING: adjust threshold if necessary
 else
     cfg.msk = ones(length(cfg.x_range),length(cfg.y_range),length(cfg.z_range));
 end
@@ -25,11 +28,6 @@ if cfg.dilate>0
     cfg.msk = imdilate(cfg.msk,strel);
 end
 
-<<<<<<< HEAD
-% load vol
-for i = 1:(cfg.last_time-cfg.first_time)/cfg.time_jump+2
-    tmp = nii2mat(sprintf('%s%02d%s',cfg.data_dir,cfg.first_time+(i-1)*cfg.time_jump,cfg.extension),cfg.x_range,cfg.y_range,cfg.z_range);
-=======
 
 
 % load vol
@@ -38,7 +36,13 @@ global_steps = (cfg.last_time-cfg.first_time)/cfg.time_jump+2;
 vol_tmp = cell(global_steps, 1);
 
 num_iter = global_steps;
-parpool(num_iter); % Or parpool(12), etc.
+
+% if has parpool, not allocate again
+if ~isempty(gcp('nocreate'))
+    num_iter = gcp().NumWorkers; % Get the number of workers in the current parallel pool
+else
+    parpool(num_iter); % Or parpool(12), etc.
+end
 
 parfor i = 1:global_steps
     cur_frame = cfg.first_time+(i-1)*cfg.time_jump;
@@ -50,19 +54,10 @@ parfor i = 1:global_steps
     else
         tmp = nii2mat(sprintf(cfg.data_template, cur_frame),cfg.x_range,cfg.y_range,cfg.z_range);
     end
->>>>>>> 9749637 (init)
     if cfg.do_resize
        tmp = resizeMatrix(tmp,round(cfg.size_factor.*size(tmp)),'linear');
     end
     if cfg.smooth>0
-<<<<<<< HEAD
-    tmp = affine_diffusion_3d(tmp,cfg.smooth,0.1,1,1);
-    end
-    tmp(~cfg.msk) = 0;
-    cfg.vol(i).data = tmp;
-end
-
-=======
         tmp = affine_diffusion_3d(tmp,cfg.smooth,0.1,1,1);
     end
     tmp(~cfg.msk) = 0;
@@ -77,7 +72,6 @@ end
 
 
 
->>>>>>> 9749637 (init)
 cfg.domain_size             = size(cfg.vol(1).data);
 cfg.sig_str                 = erase(num2str(cfg.sigma,'%.0e'),'-0');
 cfg.true_size               = round(cfg.size_factor*[length(cfg.x_range),length(cfg.y_range),length(cfg.z_range)]);
@@ -86,23 +80,6 @@ cfg.version                 = sprintf('diff_%s_tj_%d_dt_%2.1f_nt_%d_ti_%d_tf_%d_
 cfg.out_dir                 = sprintf('./test_results/%s/%s',cfg.tag,cfg.version);
 
 %% Run rOMT
-<<<<<<< HEAD
-[cfg, flag] = runROMT(cfg);
-%runROMT_par(cfg);
-
-%% Run post-processing
-
-%[cfg, map, SL, stream, PATH] = runGLAD(cfg);
-[cfg, s, SL, PATH] = runGLAD2(cfg);
-
-
-%% Visualization of speed map
-x = 1:cfg.true_size(1);
-y = 1:cfg.true_size(2);
-z = 1:cfg.true_size(3);
-figure,
-hs=slice(y,x,z,s,x,y,z); 
-=======
 
 if ~cfg.only_post_processing
     if cfg.reinitR == 1
@@ -180,17 +157,11 @@ z_slices = round(linspace(1, cfg.true_size(3), cfg.speedmap_slice));
 
 figure,
 hs=slice(y,x,z, s ,x_slices,y_slices,z_slices); 
->>>>>>> 9749637 (init)
 set(hs,'EdgeColor','none','FaceColor','interp','FaceAlpha',0.04);
 alpha('color'),alphamap(linspace(0,1,100))
 title(sprintf('Test: tag = %s, Speed Map',cfg.tag),'Fontsize',20)
 grid off, box off, axis image
 xlabel('x-axis','FontSize',20),ylabel('y-axis','FontSize',20),zlabel('z-axis','FontSize',20)
-<<<<<<< HEAD
-colormap(jet)
-caxis([0,0.5])
-view([-188.3500   13.7463])
-=======
 colormap(jet);
 
 clim([0, 0.8*max(s(:))]);
@@ -203,16 +174,10 @@ view(cfg.view_azi_elevation);
 if cfg.flip_z
     set(gca, 'ZDir', 'reverse');
 end
->>>>>>> 9749637 (init)
 set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1,0.4,0.5],'Color',[0.85,0.85,0.93]), set(gcf, 'InvertHardcopy', 'off')
 colorbar, grid on,
 
 saveas(gcf, sprintf('%s/%s/%s_LagSpeed_E%02d_%02d.png',cfg.out_dir,cfg.outdir_s,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
-<<<<<<< HEAD
-%% Visualization of flux vectors
-figure,
-strid = 10;
-=======
 
 fprintf("Speed map visualization saved.\n");
 
@@ -225,7 +190,6 @@ fprintf("Speed map visualization saved.\n");
 close all;
 figure,
 
->>>>>>> 9749637 (init)
 magnify = .5;%1;
 [x, y, z] = meshgrid(1:cfg.true_size(2), 1:cfg.true_size(1), 1:cfg.true_size(3));
 mskfv = isosurface(x,y,z,cfg.msk,0.5);
@@ -236,32 +200,6 @@ mskp.EdgeColor = [.17,.17,.17];
 mskp.EdgeAlpha= 0;
 mskp.DisplayName = 'mask';
 
-<<<<<<< HEAD
-grid on, axis image
-hold on,
-q = quiver3(PATH.startp(PATH.ind_brain(1:strid:end),2),PATH.startp(PATH.ind_brain(1:strid:end),1),PATH.startp(PATH.ind_brain(1:strid:end),3),PATH.disp(PATH.ind_brain(1:strid:end),2)*magnify,PATH.disp(PATH.ind_brain(1:strid:end),1)*magnify,PATH.disp(PATH.ind_brain(1:strid:end),3)*magnify,'color','r','LineWidth',2,'MaxHeadSize',0.3,'AutoScale','off','DisplayName','flux vectors');
-title(sprintf('%s: velocity flux vectors',cfg.tag),'FontSize',20, 'Interpreter', 'none'), set(gcf, 'Position', [376 49 1256 719])
-xlabel('x-axis','FontSize',20),ylabel('y-axis','FontSize',20),zlabel('z-axis','FontSize',20)
-%// Compute the magnitude of the vectors
-mags = sqrt(sum(cat(2, q.UData(:), q.VData(:), ...
-            reshape(q.WData, numel(q.UData), [])).^2, 2));
-
-%// Get the current colormap
-currentColormap = colormap(jet);
-[~, ~, ind] = histcounts(mags, size(currentColormap, 1));
-cmap = uint8(ind2rgb(ind(:), currentColormap) * 255);
-cmap(:,:,4) = 255;
-cmap = permute(repmat(cmap, [1 3 1]), [2 1 3]);
-set(q.Head, ...
-    'ColorBinding', 'interpolated', ...
-    'ColorData', reshape(cmap(1:3,:,:), [], 4).');   
-set(q.Tail, ...
-    'ColorBinding', 'interpolated', ...
-    'ColorData', reshape(cmap(1:2,:,:), [], 4).');
-legend('Location','best','Fontsize',12); colorbar;
-view([-188.3500   13.7463]);
-set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1,0.4,0.5],'Color',[0.85,0.85,0.93]), set(gcf, 'InvertHardcopy', 'off')
-=======
 grid on;
 axis equal;
 axis tight;
@@ -317,7 +255,6 @@ set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1
 
 clim([min(mags), max(mags)]);
 set(gcf,'unit','normalized','position',[0.1, 0.1, 0.6, 0.7],'Color',[0.85,0.85,0.93], 'InvertHardcopy', 'off');
->>>>>>> 9749637 (init)
 
 saveas(gcf, sprintf('%s/%s/%s_LagFluxVector_E%02d_%02d.png',cfg.out_dir,cfg.outdir_v,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
 
@@ -327,10 +264,6 @@ saveas(gcf, sprintf('%s/%s/%s_LagFluxVector_E%02d_%02d.png',cfg.out_dir,cfg.outd
 [InDdiff,~,~] = intersect(PATH.DIFFind,PATH.ind_brain);
 
 figure,
-<<<<<<< HEAD
-strid = 10;
-=======
->>>>>>> 9749637 (init)
 magnify = .5;%1;
 [x, y, z] = meshgrid(1:cfg.true_size(2), 1:cfg.true_size(1), 1:cfg.true_size(3));
 mskfv = isosurface(x,y,z,cfg.msk,0.5);
@@ -350,41 +283,28 @@ xlabel('x-axis','FontSize',20),ylabel('y-axis','FontSize',20),zlabel('z-axis','F
 hold on,
 l = quiver3(PATH.startp(InDdiff(1:strid:end),2),PATH.startp(InDdiff(1:strid:end),1),PATH.startp(InDdiff(1:strid:end),3),PATH.disp(InDdiff(1:strid:end),2)*magnify,PATH.disp(InDdiff(1:strid:end),1)*magnify,PATH.disp(InDdiff(1:strid:end),3)*magnify,'color','g','LineWidth',2,'MaxHeadSize',0.3,'AutoScale','off','DisplayName','Diffusive Vectors');
 
-<<<<<<< HEAD
-view([-188.3500   13.7463]); legend('Location','best','Fontsize',12);
-=======
 view(cfg.view_azi_elevation);
 if cfg.flip_z
     set(gca, 'ZDir', 'reverse');
 end
 legend('Location','best','Fontsize',12);
->>>>>>> 9749637 (init)
 set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1,0.4,0.5],'Color',[0.85,0.85,0.93]), set(gcf, 'InvertHardcopy', 'off')
 
 saveas(gcf, sprintf('%s/%s/%s_LagAdvDiffVector_E%02d_%02d.png',cfg.out_dir,cfg.outdir_v,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
 %}
-<<<<<<< HEAD
-=======
 
 
 
 fprintf("Flux vector visualization saved.\n");
 
->>>>>>> 9749637 (init)
 %% Visualization of pathlines
 figure,
 SL2 = SL(PATH.ind_brain);
 nSL = length(SL2);
-<<<<<<< HEAD
-%colors = jet(round(max(PATH.displen)));
-
-for ind = 1:10:nSL
-=======
 
 strid = cfg.strid;
 
 for ind = 1:strid:nSL
->>>>>>> 9749637 (init)
     SL_tmp = SL2{ind};
     colors = jet(size(SL_tmp,1));
     hlines = patch([SL_tmp(:,2);NaN],[SL_tmp(:,1);NaN],[SL_tmp(:,3);NaN],[1,1,1]);
@@ -393,30 +313,6 @@ for ind = 1:strid:nSL
 end
 %
 hold on;
-<<<<<<< HEAD
-[x, y, z] = meshgrid(1:cfg.true_size(2), 1:cfg.true_size(1), 1:cfg.true_size(3));
-mskfv = isosurface(x,y,z,cfg.msk,0.5);
-mskp = patch(mskfv);
-mskp.FaceColor = [.37,.37,.37];
-mskp.FaceAlpha= 0.1;
-mskp.EdgeColor = [.37,.37,.37];
-mskp.EdgeAlpha= 0;
-view([-188.3500   13.7463])
-axis image
-set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1,0.4,0.5],'Color',[0.85,0.85,0.93]), set(gcf, 'InvertHardcopy', 'off')
-colormap('jet'); colorbar, grid on,
-title(sprintf('%s: Pathlines Starting with brain',cfg.tag), 'Interpreter', 'none', 'FontSize',18);
-saveas(gcf, sprintf('%s/%s/%s_LagPathlines_E%02d_%02d.png',cfg.out_dir,cfg.outdir_v,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
-
-
-
-
-
-
-
-
-
-=======
 
 [x, y, z] = meshgrid(1:size(cfg.msk, 2), 1:size(cfg.msk, 1), 1:size(cfg.msk, 3));
 mskfv = isosurface(x,y,z,cfg.msk,0.5);
@@ -451,6 +347,7 @@ saveas(gcf, sprintf('%s/%s/%s_LagPathlines_E%02d_%02d.png',cfg.out_dir,cfg.outdi
 
 fprintf("Pathline visualization saved.\n");
 
-% manually delete par pool
-delete(gcp('nocreate')) % delete existing parallel pool if any
->>>>>>> 9749637 (init)
+
+% manually delete par pool, but if run again, do not close.
+% delete(gcp('nocreate')) % delete existing parallel pool if any
+

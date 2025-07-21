@@ -31,10 +31,10 @@ mskSP = msk;
 sp_ind = find(strcmp('brain',{cfg.sp_mask_opts(:).name}));
 if isempty(sp_ind)
     fprintf('No brain mask found in cfg.sp_mask_opts, using the whole mask.\n');
-    msk_brain = msk>0; % use the whole mask
+    msk_brain = msk>cfg.ROI_msk_threshold; % use the whole mask
 else
     mskROI = nii2mat(cfg.sp_mask_opts(sp_ind).path,cfg.x_range,cfg.y_range,cfg.z_range);
-    msk_brain = mskROI>0; % warning: in sp_mask, brain area is bigger than 1, however when now we set it as label mask.
+    msk_brain = mskROI>cfg.sp_mask_opts(sp_ind).threshold; % warning: in sp_mask, brain area is bigger than 1, however when now we set it as label mask.
     if cfg.do_resize
         msk_brain = resizeMatrix(double(msk_brain),round(cfg.size_factor.*size(msk_brain)),'linear');
         msk_brain(msk_brain~=1) = 0; % make sure it is binary
@@ -347,6 +347,7 @@ pl_cur = cellfun(@(x) x(:,[2,1,3]),SL2,'UniformOutput',false);
 
 
 %% s
+% s is the speed map, which is the speed at the start point of each streamline
 
 paper_fig_str = sprintf('set0%02d',1);
 
@@ -422,6 +423,7 @@ fprintf('Speed Map in .mat format saved in %s/%s\n\n',cfg.out_dir,outdir)
 
 
 %% v
+% v is the pathline vectors, which is the pathline at the start point of each streamline
 paper_fig_str = sprintf('set0%02d',1);
 outversion = sprintf('%s_%s',paper_fig_str,date_str);
 

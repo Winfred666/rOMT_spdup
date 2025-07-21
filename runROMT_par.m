@@ -1,10 +1,6 @@
 function [cfg,flag] = runROMT_par(cfg)
 
-<<<<<<< HEAD
-reInitializeU = 1; %1 if reinitialize u to 0 before each time step; 0 if not, unless first time step
-=======
 % reInitializeU = 1; %1 if reinitialize u to 0 before each time step; 0 if not, unless first time step
->>>>>>> 9749637 (init)
 
 if ~exist(cfg.out_dir,'dir')
     mkdir(cfg.out_dir)
@@ -17,16 +13,10 @@ end
 
 rho_n = cfg.vol(1).data(:);
 
-<<<<<<< HEAD
-if ~exist(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'file')
-    save(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'rho_n');
-end
-=======
 % if ~exist(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'file')
 % Always save rho_n no matter how.
 save(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'rho_n');
 % end
->>>>>>> 9749637 (init)
 
 fprintf('\n =============== rOMT Starts ===============\n')
 fprintf('______________________________________________\n\n')
@@ -35,15 +25,8 @@ fprintf(' size:\t\t%s\n do_resize:\t%d\n resize_factor:\t%.2f\n start frame:\t%d
 %%
 %{
 tag = cfg.tag;
-<<<<<<< HEAD
-data_dir = cfg.data_dir;
 first_time = cfg.first_time;
 time_jump = cfg.time_jump;
-extension = cfg.extension;
-=======
-first_time = cfg.first_time;
-time_jump = cfg.time_jump;
->>>>>>> 9749637 (init)
 x_range = cfg.x_range;
 y_range = cfg.y_range;
 z_range = cfg.z_range;
@@ -64,14 +47,10 @@ out_dir = cfg.out_dir;
 %%
 profile on
 clear T; T = 0;
-<<<<<<< HEAD
-parfor (tind = 1:length(cfg.first_time:cfg.time_jump:cfg.last_time),2)
-=======
 % remove the worker limit to leverage more cores
 global_steps = length(cfg.first_time:cfg.time_jump:cfg.last_time);
 % DEBUG: change parfor to for if any problem inside.
 for tind = 1:global_steps
->>>>>>> 9749637 (init)
     fprintf('tind = %d\n',tind)
     tic
     %{
@@ -83,71 +62,40 @@ for tind = 1:global_steps
         continue
     end
     %}
-<<<<<<< HEAD
-    rho_0 = cfg.vol(tind).data(:);
-
-    %true final density
-    par = paramInitFunc(cfg.true_size',cfg.nt,cfg.dt,cfg.sigma,cfg.add_source,cfg.gamma,cfg.beta,cfg.niter_pcg,cfg.dTri);
-=======
     % must load from original data.
     rho_0 = cfg.vol(tind).data(:);
 
     %true final density
     par = paramInitFunc(cfg);
->>>>>>> 9749637 (init)
     par.drhoN     = cfg.vol(tind+1).data(:);
     
     %par = paramInitFunc(true_size',nt,dt,sigma,add_source,gamma,beta,niter_pcg,dTri);
     %par.drhoN     = rho_N(:);
     
-<<<<<<< HEAD
-    % initial guess for u:
-    if tind == 1 || reInitializeU
-    u = zeros(par.dim*prod(par.n),par.nt);%zeros(2*prod(par.n),par.nt);
-    end
-    
-=======
     % must reinitialize u, cannot leverage last pass:
     u = zeros(par.dim*prod(par.n),par.nt);%zeros(2*prod(par.n),par.nt);
 
->>>>>>> 9749637 (init)
     %% Descent for u
     fprintf('\n =============== Descent on u ===============\n')
     fprintf('______________________________________________\n\n')
     fprintf('i.lsiter\tphi    \t      descent output\n')
     fprintf('________    ___________     __________________\n')
-<<<<<<< HEAD
-    [u,phi,dphi] = GNblock_u(rho_0,u,par.nt,par.dt,par);
-    
-    
-    [phi,mk,phiN,Rho,Ru]  = get_phi(rho_0,u,par.nt,par.dt,par);
-    rho_n = Rho(:,end);
-    btoc = toc;
-    T = T + btoc;
-=======
     [u,~,~] = GNblock_u(rho_0,u,par.nt,par.dt,par, sprintf("f_%d_%d",cfg.first_time + tind*cfg.time_jump, cfg.first_time + (tind+1)*cfg.time_jump));
     
     [phi,mk,phiN,Ru, Rho]  = get_phi(rho_0,u,par);
-    fprintf('________    ###########     __________________\n')
+    % fprintf('________    ###########     __________________\n')
     rho_n = Rho(:,end);
     btoc = toc;
     T = T + btoc;
-    fprintf('########    ###########     __________________\n')
->>>>>>> 9749637 (init)
+    % fprintf('########    ###########     __________________\n')
     
     dlmwrite(fname,[tind,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,phi,mk,Ru,phiN,max(u(:)),btoc],'-append');
-    
+    % WARNING: here save the velocity field.
     save_un(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),u);
     save_rhon(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),rho_n);
     
     fprintf('tind = %d, max(u) = %5.4f\n',tind,max(u));
 end
-<<<<<<< HEAD
-fprintf('\n =============== rOMT Ends ===============\n')
-fprintf('\n Elapsed Time: %s\n',datestr(seconds(T),'HH:MM:SS'))
-
-profile viewer
-=======
 
 fprintf('\n =============== rOMT Ends ===============\n')
 fprintf('\n Elapsed Time: %s\n',datestr(seconds(T),'HH:MM:SS'))
@@ -156,7 +104,6 @@ if usejava("desktop")
 profile viewer
 end
 % If not using MATLAB desktop, just print the profile results to command window
->>>>>>> 9749637 (init)
 profile off
 flag = 1;
 end

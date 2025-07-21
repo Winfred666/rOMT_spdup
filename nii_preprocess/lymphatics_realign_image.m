@@ -1,11 +1,12 @@
-function lymphatics_realign_image(lymph);
+function lymphatics_realign_image(lymph)
 
-cd(lymph.dst);
+% old_dir = pwd;
 
-spm_batch_src_dir='/usr/local/hedok/matcodes/spm12_batch/Lymphatics_Prj';
-spm_batch_fname='lymphatics_spm_realign_images.mat';
+spm_batch_src_dir='/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/data/ours/config';
+spm_batch_fname='realign_batch_config.mat';
 
-load([spm_batch_src_dir,'/',spm_batch_fname]);
+S = load([spm_batch_src_dir,'/',spm_batch_fname], 'matlabbatch');
+matlabbatch = S.matlabbatch;
 matlabbatch{1}.spm.spatial.realign.estwrite.data{:}={};
 
 for FN=1:size(lymph.src_loc,1)
@@ -21,6 +22,10 @@ cfg_util('run',job_id);
 cfg_util('deljob',job_id);
 spm quit;
 %
+
+
+fprintf("checkout outcome in %s\n", lymph.dst);
+% cd(old_dir);
 
 end
 

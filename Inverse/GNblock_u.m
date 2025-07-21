@@ -81,11 +81,18 @@ for i = 1:par.maxUiter
     
     [s,pcgflag,relres,iter]    = pcg(H,-g,0.01,par.niter_pcg);
     
+    dir_deriv = s'*g; % here s is the search direction, g is the gradient direction, need descent direction
+    if dir_deriv >= 0
+        fprintf('Warning: Search direction is not a descent direction (s''*g = %e). Reverting to gradient descent.\n', dir_deriv);
+        s = -g; % back to gradient descent
+        dir_deriv = s'*g;
+    end
+
     if pcgflag ~= 0
       warning('MATLAB:pcgExitFlag','Warning: GNblock_u.m >>> iter %d, while finding s, pcg exit flag = %d \nrelres = %3.2e, iter = %d, %s',i,pcgflag,relres,iter,tag_str)
     end
     
-    muls     = 0.7; 
+    muls     = 0.5; % initial step size for line search
     lsiter = 1;
     while 1
         ut   = u(:) + muls*s;
@@ -95,16 +102,16 @@ for i = 1:par.maxUiter
         fprintf('%3d.%d\t      %3.2e \t     phit  = %3.2e        %s\n',i,lsiter,phi,phit,tag_str);
         
         % test for line search termination
-        if phit < phi + 1e-4*s'*g%1e-4*s'*g
+        if phit < phi + 1e-4*muls*dir_deriv %1e-4*s'*g , Use Wolfe/Armijo condition with smaller muls, then this update is success
             break;                      %breaks while loop entirely (and goes to next statement after end of while loop)
         end
         muls = muls/2; lsiter = lsiter+1;
         
-        % fail if lsiter is too large
-        if lsiter > 10
+        % fail if small step still cannot improve, move toward a local minima or wrong direction
+        if lsiter > 20
             fprintf('LSB\n');
-            ut = u;     
-            flag = 1;    
+            % ut = u;  Do not use an illegal update of ut.   
+            flag = 1;
             break; % Use break instead of return to allow saving history
         end
     end

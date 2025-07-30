@@ -1,5 +1,67 @@
 # Introduction of rOMT_spdup
 
+2025 调整版本运行方式：
+
+## 1. 数据预处理
+
+脚本位于 `lymphatics_batch.m`，使用 spm_batch 做处理，必要步骤为 
+3：remove head motion， 
+5：normalize and smooth each frame
+7: get percentage on baseline；这些都已经设置好。
+
+### 1.1 准备 src_total.txt
+
+在 `src_total.txt` 逐行列出所有需要处理的 `.nii` 或 `.nii.gz` 文件 ，最好为绝对路径，包括 baseline 和之后的数据帧，如；
+
+```
+/data/xym/DEX_MRI/DEXI/DEXI_084/DCE_nii_data/T1_FLASH_3D_baseline_0000.nii
+/data/xym/DEX_MRI/DEXI/DEXI_084/DCE_nii_data/T1_FLASH_3D_baseline_0001.nii
+/data/xym/DEX_MRI/DEXI/DEXI_084/DCE_nii_data/T1_FLASH_3D_0003.nii
+
+...
+
+```
+
+### 1.2 准备 Template.nii
+
+空间对齐，并且 nii 头文件变换矩阵也对齐（否则报错）的全脑掩膜，此处预处理是用于 确定 normalize 的平均值取值范围；之后 ROMT 也要用该掩膜。
+
+用 C57Bl6 ，通过 3D Slicer General Register + Resample ，与数据简单对齐的掩膜存放在：
+
+```
+/data/xym/DEX_MRI/DEXI/Template_C57Bl6_n30_brain_DEXI_083.nii
+/data/xym/DEX_MRI/DEXI/Template_C57Bl6_n30_brain_DEXI_084.nii
+
+...
+
+```
+
+### 1.3 运行 lymphatics_batch.m
+
+所有参数调整都在 `lymphatics_batch.m` 文件中；需调整 `lymph.src` , `dataset`, `dataset_num`, `lymph.src` 以与之前的数据路径匹配。
+
+之后运行：
+
+```sh
+matlab -nodisplay -nosplash -r "run('lymphatics_batch.m')"
+```
+
+程序运行后，会在与源文件相同的 `lymph.src` 目录下得到 `psnr_` 开头的预处理文件。
+
+## 2. 运行 ROMT 优化
+
+### 1.1 参数调整
+
+ROMT 参数调整在 `set_config_CAA.m` 中，可调整部分为：
+
+```matlab
+cfg.data_template
+cfg.data_
+```
+
+### 1.2
+
+
 The regularized optimal mass transport (rOMT) problem can be described as follows. Given the initial mass distribution function $\rho_0(x)\geqslant0$ and the final one $\rho_1(x)\geqslant0$ defined on a bounded region $\Omega\subseteq\mathbb{R}^3$, one solves
 
 $$\underset{\rho,v}{\text{min}}\quad \int_0^T\int_{\Omega}\left\lVert v(t,x)\right\rVert^2\rho(t,x)dx dt $$

@@ -49,7 +49,6 @@ glacfg.vfs = 1;
 
 %% NCA parameters
 
-
 glacfg.radius = 2; % redius to dialate
 glacfg.NNnum_tol = 20; 
 glacfg.stdcut = 0.5; 
@@ -71,8 +70,27 @@ glacfg.threshstr2 = sprintf('NNnum_tol_%d_||_stdcut_%.2f_wmeancut_[%.2f,%.2f]_Np
 
 
 % vis parameters
-glacfg.jp = 5;       
+glacfg.jp = 5;  
 
+
+% WARNING: here for GLAD.1 , smooth velocity and pathline.
+
+glacfg.smoothv = 1; % smooth velocity field
+if glacfg.smoothv
+    glacfg.Svt = 12;%10; % smoothing w.r.t time
+    glacfg.Svs = 10;%5; % smoothing w.r.t space
+    glacfg.smoothvSTR = sprintf('1_Tolt%d_Tols%d',glacfg.Svt,glacfg.Svs);
+else
+    glacfg.smoothvSTR = '0';
+end
+
+glacfg.smoothp = 1;%1; % smooth pathline
+if glacfg.smoothp
+    glacfg.smpTol = 600; % the higher, the smoother the pathlines
+    glacfg.smoothpSTR = sprintf('1_Tol%d',glacfg.smpTol);
+else
+    glacfg.smoothpSTR = '0';
+end
 
 glacfg.flw_type = 'vel';%'flw';
 glacfg.pln = 2; %minimum number of unique points needed to be considered a pathline

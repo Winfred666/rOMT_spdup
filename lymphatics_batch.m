@@ -1,6 +1,5 @@
 clear all;
 clc;
-
 addpath(genpath('./nii_preprocess'))
 
 % --- CONFIGURATION ---
@@ -8,8 +7,8 @@ addpath(genpath('./nii_preprocess'))
 lymph = struct();
 lymph.run_Ns = [3,5,7]; % processing steps to run
 % lymph.src = '/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/data/ours/test1/total_src.txt'; % source image
-dataset = 'ISO';
-dataset_num = '52';
+dataset = 'DEXI';
+dataset_num = '084';
 lymph.src = sprintf('/data/xym/DEX_MRI/%s/%s_%s/src_total.txt', dataset,dataset,dataset_num);
 % dst is only for some log files.
 % lymph.dst = '/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/data/ours/test1/DCE_nii_preprocess_log'; % destination directory
@@ -18,8 +17,14 @@ lymph.dst = sprintf('/data/xym/DEX_MRI/%s/%s_%s/DCE_nii_preprocess_log', dataset
 lymph.msk = sprintf('/data/xym/DEX_MRI/%s/Template_C57Bl6_n30_brain_%s_%s.nii', dataset, dataset, dataset_num);
 
 lymph.print = 'n'; % visualize and print image.
-lymph.smooth = 0.125 * 12; % smoothing kernel size in mm unit, 2-3 times the voxel size is recommended
+lymph.smooth = 0.125 * 4; % smoothing kernel size in mm unit, 2-3 times the voxel size is recommended
 lymph.SL = 1; % slice number if want to print image after normalize + smooth
+
+
+
+
+
+
 
 % if there is no *.nii but only *.nii.gz files in src, use gunzip to unpack all *.gz
 fileID = fopen(lymph.src, 'r');

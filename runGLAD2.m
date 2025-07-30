@@ -51,11 +51,13 @@ if glacfg.do_sp
     % if cfg.do_resize
     %    data_max = resizeMatrix(data_max,round(cfg.size_factor.*size(data_max)),'linear');
     % end
-    max_signal_in_mask = max(data_max(mskSP > 0 & msk_brain > 0));
-    relative_threshold = glacfg.sp_thresh * max_signal_in_mask;
-    fprintf('Using relative threshold for starting points: %.4f (%.2f%% of max signal %.4f)\n', relative_threshold, glacfg.sp_thresh * 100, max_signal_in_mask);
-    mind = find((mskSP>0) & (data_max>relative_threshold));
-    glacfg.do_sp_str = sprintf('_data_min_%d',glacfg.sp_thresh);
+    
+    % --- MODIFICATION: Use sp_thresh as an absolute threshold ---
+    absolute_threshold = glacfg.sp_thresh;
+    fprintf('Using absolute threshold for starting points: %.4f\n', absolute_threshold);
+    mind = find((mskSP>0) & (data_max > absolute_threshold));
+    glacfg.do_sp_str = sprintf('_data_min_abs_%.4f', glacfg.sp_thresh);
+    % --- END MODIFICATION ---
 else
     mind = find(mskSP>0);
     glacfg.do_sp_str = '';
@@ -75,11 +77,11 @@ switch glacfg.spType
         mskSPvol = sum(mskSP(:)); %volume of mask used to select start points
         NSP = round(glacfg.spPerc*mskSPvol/100);
         if ~exist(sprintf('%s_%s%d_spPerc%d_nsp%d.mat',tag,glacfg.spMsk_name,glacfg.spMsk_ind,glacfg.spPerc,NSP),'file')
-            [spIND,spINDid] = datasample(mind,NSP,'Replace',false);
+            [spIND,~] = datasample(mind,NSP,'Replace',false);
             %spIND = mind(spINDid);
             save(sprintf('%s_%s%d_spPerc%d_nsp%d.mat',tag,glacfg.spMsk_name,glacfg.spMsk_ind,glacfg.spPerc,NSP),'spIND');
         else
-            load(sprintf('%s_%s%d_spPerc%d_nsp%d.mat',tag,glacfg.spMsk_name,glacfg.spMsk_ind,glacfg.spPerc,NSP));
+            load(sprintf('%s_%s%d_spPerc%d_nsp%d.mat',tag,glacfg.spMsk_name,glacfg.spMsk_ind,glacfg.spPerc,NSP), 'spIND');
         end
         [sy,sx,sz] = ind2sub(n,sort(spIND,'ascend'));
 end
@@ -158,8 +160,8 @@ xt = max([h1*0.5,h2*0.5,h3*0.5],min(xt,[h1*(n(1)-.5001),h2*(n(2)-.5001),h3*(n(3)
 %% running pathlines
 
 for t1 = ti:tj:tf
-    U = load(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,t1,t1+tj,(t1-ti)/tj + 1), 'u');
-    U = reshape(U.u,[],nt);
+    U = cfg.u{(t1-ti)/tj + 1};
+    U = reshape(U,[],nt);
     
     if strcmp(glacfg.RD,'R')
         if t1 == ti
@@ -368,7 +370,7 @@ fprintf(title_str)
 
 fprintf('getting speed map WITHOUT running QuickBundle.py...\n')
 % initialize temporary masks:
-s = zeros(n);%speed
+s = zeros(n);%speed (advect + diffuse)
 
 %getting clustered pathline start points
 spTMP = zeros(n);

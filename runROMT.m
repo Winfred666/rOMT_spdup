@@ -1,7 +1,5 @@
 function [cfg,flag] = runROMT(cfg)
 
-reInitializeU = 1; %1 if reinitialize u to 0 before each time step; 0 if not, unless first time step
-
 if ~exist(cfg.out_dir,'dir')
     mkdir(cfg.out_dir)
 end
@@ -44,11 +42,11 @@ for tind = 1:length(cfg.first_time:cfg.time_jump:cfg.last_time)
     end
 
     %true final density
-    par = paramInitFunc(cfg.true_size',cfg.nt,cfg.dt,cfg.sigma,cfg.add_source,cfg.gamma,cfg.beta,cfg.niter_pcg,cfg.dTri);
+    par = paramInitFunc(cfg);
     par.drhoN     = cfg.vol(tind+1).data(:);
     
     % initial guess for u:
-    if tind == 1 || reInitializeU
+    if tind == 1 || cfg.reInitializeU
     u = zeros(par.dim*prod(par.n),par.nt);%zeros(2*prod(par.n),par.nt);
     end
     
@@ -57,18 +55,18 @@ for tind = 1:length(cfg.first_time:cfg.time_jump:cfg.last_time)
     fprintf('______________________________________________\n\n')
     fprintf('i.lsiter\tphi    \t      descent output\n')
     fprintf('________    ___________     __________________\n')
-    [u,phi,dphi] = GNblock_u(rho_0,u,par.nt,par.dt,par);
+    [u,~,~] = GNblock_u(rho_0,u,par.nt,par.dt,par, sprintf("f_%d_%d",cfg.first_time + tind*cfg.time_jump, cfg.first_time + (tind+1)*cfg.time_jump));
     
-    
-    [phi,mk,phiN,Rho,Ru]  = get_phi(rho_0,u,par);
+    [phi,mk,phiN,Ru, Rho]  = get_phi(rho_0,u,par);
+    % fprintf('________    ###########     __________________\n')
     rho_n = Rho(:,end);
     btoc = toc;
     T = T + btoc;
     
     dlmwrite(fname,[tind,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,phi,mk,Ru,phiN,max(u(:)),btoc],'-append');
-    
-    save(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),'u');
-    save(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),'rho_n');
+    % WARNING: here save the velocity field.
+    save_un(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),u);
+    save_rhon(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),rho_n);
     
     fprintf('tind = %d, max(u) = %5.4f\n',tind,max(u));
 end

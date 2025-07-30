@@ -15,7 +15,7 @@ glacfg = paramInitGLADpar(cfg);
 
 % set usefule variables:
 nt = cfg.nt;
-n = cfg.true_size;
+n = cfg.true_size;  % IMPORTANT : true_size has already been resize.
 ti = cfg.first_time;
 tf = cfg.last_time;
 tj = cfg.time_jump;
@@ -26,16 +26,38 @@ sig_str = cfg.sig_str;
 msk = cfg.msk;
 mskSP = msk;
 
+% only display the data within brain mask
+% WARNING: this mask has three level: 0 for outside, 1 for inside view, 3 for brain
+sp_ind = find(strcmp('brain',{cfg.sp_mask_opts(:).name}));
+if isempty(sp_ind)
+    fprintf('No brain mask found in cfg.sp_mask_opts, using the whole mask.\n');
+    msk_brain = msk>cfg.ROI_msk_threshold; % use the whole mask
+else
+    mskROI = nii2mat(cfg.sp_mask_opts(sp_ind).path,cfg.x_range,cfg.y_range,cfg.z_range);
+    msk_brain = mskROI>cfg.sp_mask_opts(sp_ind).threshold; % warning: in sp_mask, brain area is bigger than 1, however when now we set it as label mask.
+    if cfg.do_resize
+        msk_brain = resizeMatrix(double(msk_brain),round(cfg.size_factor.*size(msk_brain)),'linear');
+        msk_brain(msk_brain~=1) = 0; % make sure it is binary
+    end
+    cfg.msk_brain = msk_brain; % only for visualize and debug.
+end
+
 if glacfg.do_sp
     data_max = zeros(size(cfg.vol(1).data));
     for l = 1:length(cfg.vol)
-        data_max = max(data_max , cfg.vol(l).data);
+        data_max = max(data_max,cfg.vol(l).data);
     end
-    if cfg.do_resize
-       data_max = resizeMatrix(data_max,round(cfg.size_factor.*size(data_max)),'linear');
-    end
-    mind = find((mskSP>0) & (data_max>glacfg.sp_thresh));
-    glacfg.do_sp_str = sprintf('_data_min_%d',glacfg.sp_thresh);
+    % do not repeatedly do downsampling.
+    % if cfg.do_resize
+    %    data_max = resizeMatrix(data_max,round(cfg.size_factor.*size(data_max)),'linear');
+    % end
+    
+    % --- MODIFICATION: Use sp_thresh as an absolute threshold ---
+    absolute_threshold = glacfg.sp_thresh;
+    fprintf('Using absolute threshold for starting points: %.4f\n', absolute_threshold);
+    mind = find((mskSP>0) & (data_max > absolute_threshold));
+    glacfg.do_sp_str = sprintf('_data_min_abs_%.4f', glacfg.sp_thresh);
+    % --- END MODIFICATION ---
 else
     mind = find(mskSP>0);
     glacfg.do_sp_str = '';
@@ -54,11 +76,11 @@ switch glacfg.spType
         mskSPvol = sum(mskSP(:)); %volume of mask used to select start points
         NSP = round(glacfg.spPerc*mskSPvol/100);
         if ~exist(sprintf('%s_%s%d_spPerc%d_nsp%d.mat',tag,glacfg.spMsk_name,glacfg.spMsk_ind,glacfg.spPerc,NSP),'file')
-            [spIND,spINDid] = datasample(mind,NSP,'Replace',false);
+            [spIND,~] = datasample(mind,NSP,'Replace',false);
             %spIND = mind(spINDid);
             save(sprintf('%s_%s%d_spPerc%d_nsp%d.mat',tag,glacfg.spMsk_name,glacfg.spMsk_ind,glacfg.spPerc,NSP),'spIND');
         else
-            load(sprintf('%s_%s%d_spPerc%d_nsp%d.mat',tag,glacfg.spMsk_name,glacfg.spMsk_ind,glacfg.spPerc,NSP));
+            load(sprintf('%s_%s%d_spPerc%d_nsp%d.mat',tag,glacfg.spMsk_name,glacfg.spMsk_ind,glacfg.spPerc,NSP), 'spIND');
         end
         [sy,sx,sz] = ind2sub(n,sort(spIND,'ascend'));
 end
@@ -92,6 +114,12 @@ sp_123 = [s1,s2,s3];
 pcur = sp_123; %current point i.e. list of current location in each streamline that hasn't been terminated
 npoints = length(pcur); %keep track of the # of streamlines that have not yet been terminated 
 
+fprintf("start point number for pathline: %d .", npoints)
+fprintf('Starting Point Distribution:\n');
+fprintf('X range: [%.2f, %.2f]\n', min(sx), max(sx));
+fprintf('Y range: [%.2f, %.2f]\n', min(sy), max(sy));
+fprintf('Z range: [%.2f, %.2f]\n', min(sz), max(sz));
+
 SL = cell(1,nsp);
 SPD_SL = cell(1,nsp);
 RHO_SL = cell(1,nsp);
@@ -111,8 +139,8 @@ xt = max([h1*0.5,h2*0.5,h3*0.5],min(xt,[h1*(n(1)-.5001),h2*(n(2)-.5001),h3*(n(3)
 %
 Uall = zeros(3*prod(n),nt*length(ti:tj:tf));
 for t1 = ti:tj:tf
-    U = load(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,t1,t1+tj,(t1-ti)/tj + 1), 'u');
-    Uall(:,(t1-ti)/tj*nt+1:(t1-ti)/tj*nt+nt) = reshape(U.u,[],nt);
+    U = cfg.u{(t1-ti)/tj + 1};
+    Uall(:,(t1-ti)/tj*nt+1:(t1-ti)/tj*nt+nt) = reshape(U,[],nt);
 end
 if glacfg.smoothv && glacfg.Svt>0 % smooth velocity field in time space
     Uall = cell2mat(smoothn(num2cell(Uall',1),glacfg.Svt));
@@ -140,7 +168,7 @@ for t1 = ti:tj:tf
         else
             RHO = load(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,t1-tj,t1,(t1-ti)./tj));
         end
-        RHO = RHO.rho_n;
+        RHO = RHO.rho_n; % load target.
         if nt > 1
             RHO_t = [RHO, advecDiff(RHO,U(:),nt,cfg.dt,cfg)];
         else
@@ -148,7 +176,7 @@ for t1 = ti:tj:tf
         end
     end
     
-    for t2 = 1:nt
+    for t2 = 1:nt % integral from 1 to nt along t2.
         TIND = ((t1 - ti)/tj)*nt + t2;
         T = t1+(t2-1)*(tj/nt);
         fprintf('t = %d (t1 = %d, t2 = %d -> T = %.3f)\n',TIND,t1,t2,T);
@@ -336,7 +364,7 @@ scount = zeros(n);%full count
 for k = 1:glacfg.sfs:length(pl_cur)
     % streamline cluster mask:
     slines_tmp = pl_cur(k);
-    spdlines_tmp = sstream2(k);
+    spdlines_tmp = sstream2(k); % non-averaged speed map is for each streamline
     dspdlines_tmp = dsstream2(k);
     
     n_slines = size(slines_tmp,2);
@@ -376,7 +404,7 @@ for k = 1:length(pl_cur) % averaged map
         sline = round((slines_tmp{ind_line}./[h1,h2,h3])+0.5);
         [sline,ia,~] = unique(sline, 'rows', 'stable');
         ssl = spdlines_tmp{ind_line}(ia);
-        dssl = dspdlines_tmp{ind_line}(ia);
+        dssl = dspdlines_tmp{ind_line}(ia); % diffusive velocity, just calculate using density gradient.
 
         subs_1 = sline(:,2);
         subs_2 = sline(:,1);
@@ -388,15 +416,29 @@ for k = 1:length(pl_cur) % averaged map
         subs_2(subs_2 > n(2)) = n(2);
         subs_3(subs_3 > n(3)) = n(3);
         inds = sub2ind(n, subs_1, subs_2, subs_3);
+        
+        % Find indices where speed is not zero
+        valid_indices = ssl~=0;
+        inds = inds(valid_indices);
+        ssl = ssl(valid_indices);
+        dssl = dssl(valid_indices);
 
+        %  for speed equal to zero, delete from indices and do not add that cell
+        if isempty(inds)
+            continue
+        end
         s_full(inds) = ssl + s_full(inds);
         ds_full(inds) = dssl + ds_full(inds);
+        % count the number of streamline points in each voxel
+        % to average the speed map later
         scount(inds) = scount(inds) + 1;
     end
 end
 
 Pe = s./ds;
 Pe_full = s_full./ds_full;%s_full./(ds_full+eps);
+
+% WARNING: s_full is averaged speed map, ds_full is averaged diffusive speed map.
 s_full(s_full>0) = s_full(s_full>0)./scount(scount>0);
     
 if glacfg.do_masked
@@ -418,23 +460,6 @@ fprintf('tag = %s, detect %d Pe_full == Inf\n',tag,length(find(Pe_full==Inf)));
 Pe_full(Pe_full==Inf) = 0;%max(Pe_full(Pe_full~=Inf));%0;
 
 fprintf('length(s_full(s_full>0)) = %d, length(ds_full(ds_full>0)) = %d, length(Pe_full(Pe_full>0)) = %d\n',length(s_full(s_full>0)),length(ds_full(ds_full>0)),length(Pe_full(Pe_full>0)))
-
-
-% only save within "sp_mask_opts" mask for vis
-if isfield(cfg,'sp_mask_opts')
-    sp_ind = find(strcmp('brain',{cfg.sp_mask_opts(:).name}));
-    mskROI = nii2mat(cfg.sp_mask_opts(sp_ind).path,cfg.x_range,cfg.y_range,cfg.z_range);
-    msk_brain = mskROI>1;
-    if cfg.do_resize
-        msk_brain = resizeMatrix(double(msk_brain),round(cfg.size_factor.*size(msk_brain)),'linear');
-        msk_brain(msk_brain~=1) = 0;
-        s(msk_brain==0) = 0;
-    else
-        s(msk_brain==0) = 0;
-    end
-else
-    msk_brain = msk;
-end
 
 % save
 save(sprintf('%s/%s/%s_LagSpeed_E%02d_%02d_%s_%s.mat',cfg.out_dir,outdir,cfg.tag,ti,tf+tj,paper_fig_str,date_str),'s');
@@ -474,7 +499,11 @@ fprintf('Total original %d pathlines\n',length(SL2));
 SL = cellfun(@(x) [x(:,1)./h1+0.5,x(:,2)./h2+0.5,x(:,3)./h3+0.5],SL2,'UniformOutput',false); 
 clear SL2;
 
+% disp stores these displacement vectors.
+% dispnor stores the normalized displacement vectors (direction only).
+
 dispnor = cellfun(@(x) (x(end,:)-x(1,:))/norm(x(end,:)-x(1,:)),SL,'UniformOutput',false); 
+% net displacement vector between the start and end points of each pathline
 disp = cellfun(@(x) x(end,:)-x(1,:),SL,'UniformOutput',false); 
 startp = cellfun(@(x) x(1,:),SL,'UniformOutput',false); 
 endp = cellfun(@(x) x(end,:),SL,'UniformOutput',false); 

@@ -170,8 +170,11 @@ switch upper(dataType)
                           varargin{ vidx(ii) + 4 }(:)'];
 
                 if ~binaryflag
-                    spec = ['%0.', precision, 'f '];
-                    fprintf(fid, spec, output);
+                    % WARNING: change here:
+                    % Create a format string for one vector (3 floats) per line.
+                    spec = ['%0.', precision, 'f %0.', precision, 'f %0.', precision, 'f\n'];
+                    % Transpose the output matrix so that fprintf prints one row at a time.
+                    fprintf(fid, spec, output');
                 else
                     fwrite(fid, output, 'float', 'b');
                 end
@@ -276,4 +279,3 @@ else
     fprintf(fid, 'BINARY\n');
 end
 end
-    

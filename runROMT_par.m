@@ -50,7 +50,7 @@ clear T; T = 0;
 % remove the worker limit to leverage more cores
 global_steps = length(cfg.first_time:cfg.time_jump:cfg.last_time);
 % DEBUG: change parfor to for if any problem inside.
-for tind = 1:global_steps
+parfor tind = 1:global_steps
     fprintf('tind = %d\n',tind)
     tic
     %{

@@ -108,7 +108,7 @@ for i = 1:par.maxUiter
         muls = muls/2; lsiter = lsiter+1;
         
         % fail if small step still cannot improve, move toward a local minima or wrong direction
-        if lsiter > 20
+        if lsiter > 16
             fprintf('LSB\n');
             % ut = u;  Do not use an illegal update of ut.   
             flag = 1;

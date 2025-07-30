@@ -11,6 +11,10 @@ end
 
 cfg = set_config_CAA(config_tag); % Load configuration from function
 
+if ~isfield(cfg, 'exclude_frames')
+    cfg.exclude_frames = [];
+end
+
 % load ROI
 if cfg.do_ROI_msk
     tmp = nii2mat(cfg.ROI_msk_path,cfg.x_range,cfg.y_range,cfg.z_range);
@@ -70,7 +74,11 @@ for i = 1:global_steps
     cfg.vol(i).data = vol_tmp{i};
 end
 
-
+% --- Find global max signal for thresholding ---
+data_max = zeros(size(cfg.vol(1).data));
+for l = 1:length(cfg.vol)
+    data_max = max(data_max, cfg.vol(l).data);
+end
 
 cfg.domain_size             = size(cfg.vol(1).data);
 cfg.sig_str                 = erase(num2str(cfg.sigma,'%.0e'),'-0');
@@ -83,14 +91,23 @@ cfg.out_dir                 = sprintf('./test_results/%s/%s',cfg.tag,cfg.version
 
 if ~cfg.only_post_processing
     if cfg.reinitR == 1
+        % --- Robust Parallel Pool Check ---
+        % Check if a parallel pool is running, if not, start one.
+        % This makes the script more robust for batch execution with nohup.
+        pool = gcp('nocreate'); % Check for a pool without creating one
+        if isempty(pool)
+            fprintf('No parallel pool found. Starting a new one...\n');
+            parpool; % If no pool, start one
+        end        % --- End of Check ---
         [cfg, flag] = runROMT_par(cfg);
     else
         [cfg, flag] = runROMT(cfg);
     end
 end
 
-% try to load previous results
+%% Try to load rOMT velocity results
 fprintf('Loading rOMT results from: %s\n', cfg.out_dir);
+
 global_steps = length(cfg.first_time:cfg.time_jump:cfg.last_time);
 u_cell = cell(1, global_steps);
 
@@ -102,7 +119,22 @@ parfor tind = 1:global_steps
     if exist(ufile, 'file')
         fprintf('Loading %s\n', ufile);
         loaded_data = load(ufile, 'u');
-        u_cell{tind} = loaded_data.u;
+        
+        % --- MODIFICATION: Mask velocity based on density threshold ---
+        rho = cfg.vol(tind).data;
+        mask_low_density = rho < cfg.density_percent_thres;
+        % WARNING: here abandon the first 4-7 time steps, because they do not preserve mass.
+        if ismember(ti, cfg.exclude_frames)
+            mask_low_density = true(size(mask_low_density)); % Exclude frames, set mask to true
+        end
+        % Reshape u for easier manipulation
+        u_reshaped = reshape(loaded_data.u, [prod(cfg.domain_size), 3, cfg.nt]);
+        
+        % Apply mask to all velocity components and time steps
+        u_reshaped(mask_low_density(:), :, :) = 0;
+        
+        u_cell{tind} = reshape(u_reshaped, size(loaded_data.u));
+        % --- END MODIFICATION ---
     else
         error('Saved result file not found: %s\nCannot proceed to GLAD post-processing.', ufile);
     end
@@ -111,9 +143,103 @@ cfg.u = u_cell;
 
 %% Run GLAD post-processing
 
-%[cfg, map, SL, stream, PATH] = runGLAD(cfg);
+[cfg, map, SL, stream, PATH] = runGLAD(cfg);
 
-[cfg, s, SL, PATH] = runGLAD2(cfg);
+% [cfg, s, SL, PATH] = runGLAD2(cfg); % just faster analysis, without pecklet number.
+
+
+% --- Calculate axis limits from valid pathline start points for consistent visualization ---
+fprintf('Calculating axis limits from valid pathline start points for consistent visualization...\n');
+valid_start_points = PATH.startp(PATH.ind_brain, :);
+if isempty(valid_start_points)
+    warning('No valid pathlines found inside the brain mask. Using full volume for axis limits.');
+    x_plot_lims = [1, cfg.true_size(2)];
+    y_plot_lims = [1, cfg.true_size(1)];
+    z_plot_lims = [1, cfg.true_size(3)];
+else
+    % The columns in PATH.startp are [y, x, z]
+    % Plot's X-axis is dimension 2, Y-axis is dimension 1
+    x_plot_lims = [min(valid_start_points(:, 2)), max(valid_start_points(:, 2))];
+    y_plot_lims = [min(valid_start_points(:, 1)), max(valid_start_points(:, 1))];
+    z_plot_lims = [min(valid_start_points(:, 3)), max(valid_start_points(:, 3))];
+    
+    % Add a small buffer to the limits to prevent data points from being on the edge
+    x_buffer = (x_plot_lims(2) - x_plot_lims(1)) * 0.05;
+    y_buffer = (y_plot_lims(2) - y_plot_lims(1)) * 0.05;
+    z_buffer = (z_plot_lims(2) - z_plot_lims(1)) * 0.05;
+    
+    x_plot_lims = [x_plot_lims(1) - x_buffer, x_plot_lims(2) + x_buffer];
+    y_plot_lims = [y_plot_lims(1) - y_buffer, y_plot_lims(2) + y_buffer];
+    z_plot_lims = [z_plot_lims(1) - z_buffer, z_plot_lims(2) + z_buffer];
+end
+% --- End of axis calculation ---
+
+
+%% Visualization of Pe map (full)
+x = 1:cfg.true_size(1);
+y = 1:cfg.true_size(2);
+z = 1:cfg.true_size(3);
+
+x_slices = round(linspace(1, cfg.true_size(2), cfg.speedmap_slice));
+y_slices = round(linspace(1, cfg.true_size(1), cfg.speedmap_slice));
+z_slices = round(linspace(1, cfg.true_size(3), cfg.speedmap_slice));
+
+figure,
+hs=slice(y,x,z,map.Pe_full,x_slices,y_slices,z_slices); 
+set(hs,'EdgeColor','none','FaceColor','interp','FaceAlpha',0.04);
+custom_alpha = [0, linspace(0.15, 1, 99)];
+alpha('color'),alphamap(custom_alpha)
+
+title(sprintf('%s: Pe Map',cfg.tag), 'Interpreter', 'none', 'FontSize', cfg.vis_font_size);
+grid off, box off, axis image
+xlabel('x-axis','FontSize',cfg.vis_font_size),ylabel('y-axis','FontSize',cfg.vis_font_size),zlabel('z-axis','FontSize',cfg.vis_font_size)
+
+
+% Create a modified colormap
+num_colors = 2400; % Number of colors in the colormap
+cmap = zeros(num_colors, 3); % Initialize colormap
+% Define the split point for Pe < 1 and Pe > 1
+split_point = round(num_colors * (1 - 0) / 800); % Normalize 1 to the range [0, 800]
+
+% Create blue gradient for Pe < 1
+for i = 1:split_point
+    cmap(i, 1) = 0;           % Red
+    cmap(i, 2) = 0;           % Green
+    cmap(i, 3) = (i / split_point)/2 + 0.5; % Blue (gradient from 0 to 1)
+end
+% Create yellow to red gradient for Pe > 1
+for i = split_point+1:num_colors
+    cmap(i, 1) = (i - split_point) / (num_colors - split_point)*0.5+0.5; % Red (gradient from 0.5 to 1)
+    cmap(i, 2) = (num_colors - i) / (num_colors - split_point)*0.5; % Green (gradient from 0.5 to 0)
+    cmap(i, 3) = 0;           % Blue
+end
+colormap(cmap); % Apply the modified colormap
+
+% Set a fixed color range for the Peclet number to avoid outliers washing
+% out the map. A range is chosen because Pe=1 is the critical
+% point where advection and diffusion are balanced. This range highlights
+% the transition between diffusion-dominated (Pe<1) and 
+% advection-dominated (Pe>1) regions.
+clim([0, 800]);
+
+axis tight; % Use 'axis tight' to preserve the aspect ratio
+xlim(x_plot_lims);
+ylim(y_plot_lims);
+zlim(z_plot_lims);
+
+set(gcf,'unit','normalized','position',[0.1, 0.1, 0.6, 0.7],'Color',[0.85,0.85,0.93], 'InvertHardcopy', 'off');
+
+view(cfg.view_azi_elevation);
+if cfg.flip_z
+    set(gca, 'ZDir', 'reverse');
+end
+set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1,0.4,0.5],'Color',[0.85,0.85,0.93]), set(gcf, 'InvertHardcopy', 'off')
+colorbar, grid on,
+
+saveas(gcf, sprintf('%s/%s/%s_LagPe_E%02d_%02d.png',cfg.out_dir,cfg.outdir_s,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
+savefig(gcf, sprintf('%s/%s/%s_LagPe_E%02d_%02d.fig',cfg.out_dir,cfg.outdir_s,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
+%
+
 
 %% Save and Visualize Velocity Field at Each Frame
 
@@ -146,28 +272,32 @@ if ~cfg.only_post_processing
     visualize_velocity_field(cfg, global_max_speed);
 end
 
-%% Visualization of speed map (at integral part)
-x = 1:cfg.true_size(1);
-y = 1:cfg.true_size(2);
-z = 1:cfg.true_size(3);
+%% Visualization of speed map (at integral + avearage part)
 
-x_slices = []; 
-y_slices = []; 
-z_slices = round(linspace(1, cfg.true_size(3), cfg.speedmap_slice));
+% The speed map (map.s_full) represents the magnitude of the velocity at each voxel, averaged over time (integral part). 
+% It's derived directly from the velocity field.
+% Average from total step: 1 + (number of t1 steps) * nt * glacfg.nEulStep
+s = map.s_full; % Speed map at integral part
 
 figure,
-hs=slice(y,x,z, s ,x_slices,y_slices,z_slices); 
+hs=slice(y,x,z,s,x_slices,y_slices,z_slices); 
 set(hs,'EdgeColor','none','FaceColor','interp','FaceAlpha',0.04);
 alpha('color'),alphamap(linspace(0,1,100))
-title(sprintf('Test: tag = %s, Speed Map',cfg.tag),'Fontsize',20)
+title(sprintf('%s: Speed Map',cfg.tag), 'Interpreter', 'none', 'FontSize', cfg.vis_font_size);
 grid off, box off, axis image
-xlabel('x-axis','FontSize',20),ylabel('y-axis','FontSize',20),zlabel('z-axis','FontSize',20)
+xlabel('x-axis','FontSize',cfg.vis_font_size),ylabel('y-axis','FontSize',cfg.vis_font_size),zlabel('z-axis','FontSize',cfg.vis_font_size)
 colormap(jet);
 
-clim([0, 0.8*max(s(:))]);
+% Set a fixed color range for the speed map to [0, 1] to ensure
+% consistency across different datasets and prevent high-velocity outliers
+% from dominating the color scale.
+clim([0, 0.3]);
 
-axis equal; % Use 'axis equal' to preserve the aspect ratio
-axis tight;
+axis tight; % Use 'axis tight' to preserve the aspect ratio
+xlim(x_plot_lims);
+ylim(y_plot_lims);
+zlim(z_plot_lims);
+
 set(gcf,'unit','normalized','position',[0.1, 0.1, 0.6, 0.7],'Color',[0.85,0.85,0.93], 'InvertHardcopy', 'off');
 
 view(cfg.view_azi_elevation);
@@ -178,11 +308,13 @@ set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1
 colorbar, grid on,
 
 saveas(gcf, sprintf('%s/%s/%s_LagSpeed_E%02d_%02d.png',cfg.out_dir,cfg.outdir_s,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
+savefig(gcf, sprintf('%s/%s/%s_LagSpeed_E%02d_%02d.fig',cfg.out_dir,cfg.outdir_s,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
 
 fprintf("Speed map visualization saved.\n");
 
 %% Visualization of flux vectors
 
+% represent the displacement of particles over a certain time period. This displacement is calculated by integrating the velocity field along pathlines.
 % quiver direction: the net direction of particle displacement
 % quiver length: magnitude of the net displacement, also known as the pathline's displacement length
 % quiver color: The color of each arrow also represents the magnitude of the net displacement (the same quantity as the length).
@@ -190,7 +322,7 @@ fprintf("Speed map visualization saved.\n");
 close all;
 figure,
 
-magnify = .5;%1;
+magnify = 1;%1;
 [x, y, z] = meshgrid(1:cfg.true_size(2), 1:cfg.true_size(1), 1:cfg.true_size(3));
 mskfv = isosurface(x,y,z,cfg.msk,0.5);
 mskp = patch(mskfv);
@@ -206,13 +338,15 @@ axis tight;
 hold on,
 
 strid = cfg.strid; % Stride: plot one vector every 4 voxels
+% quiver direction is the net direction of particle displacement
+% quiver length is the magnitude of the net displacement from ti to tf
 q = quiver3(PATH.startp(PATH.ind_brain(1:strid:end),2),PATH.startp(PATH.ind_brain(1:strid:end),1),PATH.startp(PATH.ind_brain(1:strid:end),3),PATH.disp(PATH.ind_brain(1:strid:end),2)*magnify, ...
     PATH.disp(PATH.ind_brain(1:strid:end),1)*magnify, ...
     PATH.disp(PATH.ind_brain(1:strid:end),3)*magnify, ... 
     'color','r','LineWidth',2,'MaxHeadSize',0.3,'AutoScale','off','DisplayName','flux vectors');
 
-title(sprintf('%s: velocity flux vectors',cfg.tag),'FontSize',20, 'Interpreter', 'none'), set(gcf, 'Position', [376 49 1256 719])
-xlabel('x-axis','FontSize',20),ylabel('y-axis','FontSize',20),zlabel('z-axis','FontSize',20)
+title(sprintf('%s: velocity flux vectors',cfg.tag),'FontSize',cfg.vis_font_size, 'Interpreter', 'none'), set(gcf, 'Position', [376 49 1256 719])
+xlabel('x-axis','FontSize',cfg.vis_font_size),ylabel('y-axis','FontSize',cfg.vis_font_size),zlabel('z-axis','FontSize',cfg.vis_font_size)
 %// Compute the magnitude of the vectors
 mags = sqrt(sum(cat(2, q.UData(:), q.VData(:), q.WData(:)).^2, 2));
 
@@ -308,7 +442,7 @@ for ind = 1:strid:nSL
     SL_tmp = SL2{ind};
     colors = jet(size(SL_tmp,1));
     hlines = patch([SL_tmp(:,2);NaN],[SL_tmp(:,1);NaN],[SL_tmp(:,3);NaN],[1,1,1]);
-    %set(hlines,'EdgeColor',colors(round(PATH.displen(ind)),:));
+    %set(hlines,'EdgeColor',colors.round(PATH.displen(ind),:));
     set(hlines,'FaceVertexCData',[colors;colors(end,:)],'EdgeColor','flat','FaceColor','none');
 end
 %
@@ -341,7 +475,7 @@ axis tight;
 set(gcf,'unit','normalized','position',[0.1, 0.1, 0.6, 0.7],'Color',[0.85,0.85,0.93], 'InvertHardcopy', 'off');
 
 colormap('jet'); colorbar, grid on,
-title(sprintf('%s: Pathlines Starting with brain',cfg.tag), 'Interpreter', 'none', 'FontSize',18);
+title(sprintf('%s: Pathlines Starting with brain',cfg.tag), 'Interpreter', 'none', 'FontSize',cfg.vis_font_size);
 saveas(gcf, sprintf('%s/%s/%s_LagPathlines_E%02d_%02d.png',cfg.out_dir,cfg.outdir_v,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump));
 
 

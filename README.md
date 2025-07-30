@@ -50,16 +50,82 @@ matlab -nodisplay -nosplash -r "run('lymphatics_batch.m')"
 
 ## 2. 运行 ROMT 优化
 
+由于一般设置 nt > 1 以增加自由度，一次优化过程 = 一次插值过程
+
 ### 1.1 参数调整
 
-ROMT 参数调整在 `set_config_CAA.m` 中，可调整部分为：
+ROMT 优化过程的参数调整在 `set_config_CAA.m` 中；
+
+设置 `cfg.only_post_processing = 0` 以执行 ROMT 优化。
+
+根据 `config_tag` 的不同，可分别设置不同组数据的配置，最后输出到 `./test_results/${config_tag}` 中；以下具体优化过程参数
 
 ```matlab
-cfg.data_template
-cfg.data_
+cfg.data_template   % 之前预处理得到的 psnr_ 序列
+cfg.ROI_msk_path    % 全脑分析中，使用之前预处理使用的 Template.nii 即可
+
+cfg.do_ROI_msk，ROI_msk_threshold  % 是否启用上述 mask，值大于 threshold 的体素考虑在 mask 内。 
+
+
+cfg.x_range, cfg.y_range, cfg.z_range % 与数据保持一致；
+
+cfg.do_resize       % 设置为 1 时会使用 `cfg.size_factor` 下采样数据，显著提高运行速度
+
+cfg.smooth          % 在空间维度上再次平滑密度场，设置为 dt 的几倍表示平滑范围为多少格；
+
+cfg.dilate          % ROI_msk 膨胀 dilate 个体素后才是优化的最终控制域，防止边界不平滑处流动受限，
+
+cfg.first_time      % 从该数据帧开始 优化/插值
+cfg.time_jump       % 设置为 2，表示每次 优化/插值 的初始密度场为 sprintf("%04d.nii",ti)，目标密度场为 sprintf("%04d.nii",ti+2) 
+cfg.last_time       % 该数据帧是最后一次 优化/插值 的初始密度场（因此需要 last_time + cfg.time_jump 帧）
+
+cfg.sigma           % 关键：经验扩散系数
+cfg.dt              % 关键：插值帧之间（不是原始数据帧之间）的最小时间步长
+cfg.nt              % 关键：插值帧数
+cfg.gamma,cfg.beta  % loss 权重，不用动
+cfg.reinitR,cfg.reInitializeU  % 重置而非使用上一次优化得到的密度/速度场。并行则都设置为 1， 30 min 可跑完；串行都设置 0， 5 hour 才跑完但得到速度更快更平滑；
+
+cfg.niter_pcg, cfg.maxUiter % 每次更新线性方程求解/优化更新 迭代次数，迭代多次更易收敛，一般不用动
+
 ```
 
-### 1.2
+### 1.2 运行
+
+若运行 ISO 配置的优化过程，则执行：
+
+```sh
+matlab -nodisplay -nosplash -r "config_tag='ours_ISO';run('driver_CAA.m')"
+```
+
+## 3. 运行 GLAD 后处理
+
+### 3.1 参数调整
+
+若之前执行过同配置的 ROMT 优化，则设置 `cfg.only_post_processing = 1` ，以从保存的 `u0_ours_ISO...mat` 中恢复速度场，只进行后处理。
+
+```matlab
+cfg.exclude_frames  % 在后处理中过滤异常速度场，比如 4 表示设置 0004-0005 的速度为 0，不移动轨迹线或用于计算平均速度
+
+cfg.density_percent_thres   = 16; % 过滤全过程所有时刻中，最大相对密度低于此阈值的体素的速度场，原同 exclude_frames
+
+cfg.sp_thresh                     % 过滤全过程所有时刻中，最大相对密度低于此阈值的体素，不在这些体素生成 pathline 起始点
+
+cfg.sl_tol                        % 只保留长度多于 sl_tol 格的 pathline
+
+cfg.sp_mask_opts(1).name,path,threshold          % 隔室分析可用，进一步约束后处理的控制体，值大于 threshold 的体素考虑在 mask 内。 
+
+```
+
+
+其余 `cfg.speedmap_slice` `cfg.strid` 等，是最后可视化参数调整，如果不对，完全可以跑完 GLAD 后，将 `driver_CAA.m` 内部的绘图代码，复制到命令行中快速重跑可视化。
+
+### 3.2 运行
+
+设置 `cfg.only_post_processing = 1` 后，重新跑：
+
+```sh
+matlab -nodisplay -nosplash -r "config_tag='ours_ISO';run('driver_CAA.m')"
+```
 
 
 The regularized optimal mass transport (rOMT) problem can be described as follows. Given the initial mass distribution function $\rho_0(x)\geqslant0$ and the final one $\rho_1(x)\geqslant0$ defined on a bounded region $\Omega\subseteq\mathbb{R}^3$, one solves

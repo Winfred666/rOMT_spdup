@@ -94,7 +94,7 @@ end
 
 glacfg.flw_type = 'vel';%'flw';
 glacfg.pln = 2; %minimum number of unique points needed to be considered a pathline
-glacfg.RD = 'R'; %'D' if use data; 'R' if use interpolated img
+glacfg.RD = 'D'; %'D' if use data; 'R' if use interpolated img
 glacfg.XT = 'T'; %'X' if interp fixed spatial dist, 'T' if use time step;
 glacfg.minIm0 = 0; %1 if set img = img - min(img), 0 otherwise
 

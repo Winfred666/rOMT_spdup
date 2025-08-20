@@ -69,9 +69,20 @@ parfor i = 1:global_steps
 end
 
 
+cfg.sig_str                 = erase(num2str(cfg.sigma,'%.0e'),'-0');
+cfg.true_size               = round(cfg.size_factor*[length(cfg.x_range),length(cfg.y_range),length(cfg.z_range)]);
+cfg.version                 = sprintf('diff_%s_tj_%d_dt_%2.1f_nt_%d_ti_%d_tf_%d_uini_0_beta_%5.4f_R_gamma_%4.3f_dtri%d_rsmooth%d_rreinit%d_source%d_dilate%d_pcg%d',...
+                                cfg.sig_str,cfg.time_jump,cfg.dt,cfg.nt,cfg.first_time,cfg.last_time,cfg.beta,cfg.gamma,cfg.dTri,cfg.smooth,cfg.reinitR,cfg.add_source,cfg.dilate,cfg.niter_pcg);
+cfg.out_dir                 = sprintf('./test_results/%s/%s',cfg.tag,cfg.version);
 
 for i = 1:global_steps
     cfg.vol(i).data = vol_tmp{i};
+    rho_n = cfg.vol(i).data;
+    if(~exist(sprintf('%s/rho_gt',cfg.out_dir), "dir"))
+    mkdir(sprintf('%s/rho_gt',cfg.out_dir));
+    end
+    rho_gt_file = sprintf('%s/rho_gt/rhoGT_%s_t_%d.mat',cfg.out_dir,cfg.tag, cfg.first_time + i - 1);
+    save(rho_gt_file, 'rho_n');
 end
 
 % --- Find global max signal for thresholding ---
@@ -81,11 +92,6 @@ for l = 1:length(cfg.vol)
 end
 
 cfg.domain_size             = size(cfg.vol(1).data);
-cfg.sig_str                 = erase(num2str(cfg.sigma,'%.0e'),'-0');
-cfg.true_size               = round(cfg.size_factor*[length(cfg.x_range),length(cfg.y_range),length(cfg.z_range)]);
-cfg.version                 = sprintf('diff_%s_tj_%d_dt_%2.1f_nt_%d_ti_%d_tf_%d_uini_0_beta_%5.4f_R_gamma_%4.3f_dtri%d_rsmooth%d_rreinit%d_source%d_dilate%d_pcg%d',...
-                                cfg.sig_str,cfg.time_jump,cfg.dt,cfg.nt,cfg.first_time,cfg.last_time,cfg.beta,cfg.gamma,cfg.dTri,cfg.smooth,cfg.reinitR,cfg.add_source,cfg.dilate,cfg.niter_pcg);
-cfg.out_dir                 = sprintf('./test_results/%s/%s',cfg.tag,cfg.version);
 
 %% Run rOMT
 
@@ -147,6 +153,10 @@ cfg.u = u_cell;
 
 % [cfg, s, SL, PATH] = runGLAD2(cfg); % just faster analysis, without pecklet number.
 
+% --- WARNING: could do Post-GLAD Pathline Filtering later ---
+old_ind_brain = PATH.ind_brain; % Store old indices for reference
+
+
 
 % --- Calculate axis limits from valid pathline start points for consistent visualization ---
 fprintf('Calculating axis limits from valid pathline start points for consistent visualization...\n');
@@ -187,7 +197,7 @@ z_slices = round(linspace(1, cfg.true_size(3), cfg.speedmap_slice));
 figure,
 hs=slice(y,x,z,map.Pe_full,x_slices,y_slices,z_slices); 
 set(hs,'EdgeColor','none','FaceColor','interp','FaceAlpha',0.04);
-custom_alpha = [0, linspace(0.15, 1, 99)];
+custom_alpha = [0, linspace(0.4, 0.6, 99)];
 alpha('color'),alphamap(custom_alpha)
 
 title(sprintf('%s: Pe Map',cfg.tag), 'Interpreter', 'none', 'FontSize', cfg.vis_font_size);
@@ -195,24 +205,34 @@ grid off, box off, axis image
 xlabel('x-axis','FontSize',cfg.vis_font_size),ylabel('y-axis','FontSize',cfg.vis_font_size),zlabel('z-axis','FontSize',cfg.vis_font_size)
 
 
-% Create a modified colormap
-num_colors = 2400; % Number of colors in the colormap
-cmap = zeros(num_colors, 3); % Initialize colormap
-% Define the split point for Pe < 1 and Pe > 1
-split_point = round(num_colors * (1 - 0) / 800); % Normalize 1 to the range [0, 800]
+% Create a modified colormap with clear distinction at Pe = 1
+num_colors = 256; % Standard colormap size
+cmap = zeros(num_colors, 3);
 
-% Create blue gradient for Pe < 1
-for i = 1:split_point
-    cmap(i, 1) = 0;           % Red
-    cmap(i, 2) = 0;           % Green
-    cmap(i, 3) = (i / split_point)/2 + 0.5; % Blue (gradient from 0 to 1)
+% Calculate the split point where Pe = 1
+% Assuming clim range [0, 800], Pe = 1 corresponds to index: 1/800 * num_colors
+split_idx = round((1/800) * num_colors);
+if split_idx < 1, split_idx = 1; end
+if split_idx > num_colors, split_idx = num_colors; end
+
+% Diffusion-dominated region (Pe < 1): Blue gradient
+% From dark blue to light blue
+blue_colors = split_idx;
+for i = 1:blue_colors
+    intensity = i / blue_colors; % 0 to 1
+    cmap(i, :) = [0, 0, 0.3 + 0.7*intensity]; % Dark blue to bright blue
 end
-% Create yellow to red gradient for Pe > 1
-for i = split_point+1:num_colors
-    cmap(i, 1) = (i - split_point) / (num_colors - split_point)*0.5+0.5; % Red (gradient from 0.5 to 1)
-    cmap(i, 2) = (num_colors - i) / (num_colors - split_point)*0.5; % Green (gradient from 0.5 to 0)
-    cmap(i, 3) = 0;           % Blue
+
+% Advection-dominated region (Pe > 1): Red-Yellow gradient  
+% From yellow to red
+red_colors = num_colors - split_idx;
+if red_colors > 0
+    for i = 1:red_colors
+        intensity = i / red_colors; % 0 to 1
+        cmap(split_idx + i, :) = [1, 1 - 0.9*intensity, 0]; % Yellow to red
+    end
 end
+
 colormap(cmap); % Apply the modified colormap
 
 % Set a fixed color range for the Peclet number to avoid outliers washing
@@ -234,7 +254,20 @@ if cfg.flip_z
     set(gca, 'ZDir', 'reverse');
 end
 set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1,0.4,0.5],'Color',[0.85,0.85,0.93]), set(gcf, 'InvertHardcopy', 'off')
-colorbar, grid on,
+
+% Add colorbar with custom tick at Pe = 1
+cb = colorbar;
+cb.Label.String = 'Peclet Number (Pe)';
+cb.Label.FontSize = cfg.vis_font_size;
+
+% Add a custom tick at Pe = 1 to highlight the transition
+current_ticks = cb.Ticks;
+if ~ismember(1, current_ticks)
+    new_ticks = sort([current_ticks, 1]);
+    cb.Ticks = new_ticks;
+end
+
+grid on,
 
 saveas(gcf, sprintf('%s/%s/%s_LagPe_E%02d_%02d.png',cfg.out_dir,cfg.outdir_s,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
 savefig(gcf, sprintf('%s/%s/%s_LagPe_E%02d_%02d.fig',cfg.out_dir,cfg.outdir_s,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 

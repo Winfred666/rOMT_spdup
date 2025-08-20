@@ -162,19 +162,66 @@ for t1 = ti:tj:tf
         U(:,t2) = [v1(:);v2(:);v3(:)];
     end
     end
-    if strcmp(glacfg.RD,'R')
-        if t1 == ti
+
+    % --- MODIFICATION: Pre-calculate density evolution for both 'R' and 'D' modes ---
+    ground_truth_rho_idx = (t1 - ti) / tj + 1;
+    if strcmp(glacfg.RD,'R') % RD == R means using last density field.
+        if t1 == ti % the starting rho field.
             RHO = load(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,ti));
         else
             RHO = load(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,t1-tj,t1,(t1-ti)./tj));
         end
-        RHO = RHO.rho_n; % load target.
-        if nt > 1
-            RHO_t = [RHO, advecDiff(RHO,U(:),nt,cfg.dt,cfg)];
-        else
-            RHO_t = RHO;
-        end
+        RHO = RHO.rho_n; % load target frame.
+    elseif strcmp(glacfg.RD,'D') % RD == D means using ground truth data as the start.
+        RHO = cfg.vol(ground_truth_rho_idx).data;
     end
+    
+    if nt > 1 % interpolate rho field for all sub-steps.
+        RHO_t = [RHO(:), advecDiff(RHO(:),U(:),nt,cfg.dt,cfg)];
+    else
+        RHO_t = RHO(:);
+    end
+
+    % --- VISUALIZATION OF RHO DIFFERENCE ---
+    rho_diff_dir = sprintf('%s/rho_diff', cfg.out_dir);
+    if ~exist(rho_diff_dir, 'dir')
+        mkdir(rho_diff_dir);
+    end
+    
+    % Get the ground truth rho for the end of the interval
+    if ground_truth_rho_idx <= length(cfg.vol)
+        ground_truth_rho = cfg.vol(ground_truth_rho_idx).data;
+        % Get the final advected-diffused rho
+        advected_rho = reshape(RHO_t(:, end), n);
+        % Calculate the difference
+        rho_difference = ground_truth_rho - advected_rho;
+        % Save the difference matrix
+        save(sprintf('%s/rho_diff_t%d.mat', rho_diff_dir, t1), 'rho_difference');
+        % Create and save the visualization
+        figure('Visible', 'off'); % Create figure without showing it
+        x = 1:n(1); y = 1:n(2); z = 1:n(3);
+        x_slices = round(linspace(1, n(2), 5));
+        y_slices = round(linspace(1, n(1), 5));
+        z_slices = round(linspace(1, n(3), 5));
+        
+        hs = slice(y, x, z, rho_difference, x_slices, y_slices, z_slices);
+        set(hs, 'EdgeColor', 'none', 'FaceColor', 'interp', 'FaceAlpha', 0.2);
+        title(sprintf('Rho Difference (Ground Truth - Advected) at t=%d', t1));
+        xlabel('x-axis'), ylabel('y-axis'), zlabel('z-axis');
+        axis image, axis tight;
+        colormap(bwr); % Blue-white-red colormap for differences
+        colorbar;
+        
+        % Set color limits to be symmetric around zero
+        max_abs_diff = max(abs(rho_difference(:)));
+        if max_abs_diff > 0
+            clim([-max_abs_diff, max_abs_diff]);
+        end
+
+        saveas(gcf, sprintf('%s/rho_diff_t%d.png', rho_diff_dir, t1));
+        close(gcf);
+    end
+    % --- END OF VISUALIZATION ---
     
     for t2 = 1:nt % integral from 1 to nt along t2.
         TIND = ((t1 - ti)/tj)*nt + t2;
@@ -182,13 +229,8 @@ for t1 = ti:tj:tf
         fprintf('t = %d (t1 = %d, t2 = %d -> T = %.3f)\n',TIND,t1,t2,T);
         
         switch glacfg.RD
-            case 'D'
-                d = cfg.vol(round((t1 - ti)/tj + 1 + (t2-1)/nt)).data;
-                if cfg.smooth>0
-                    d = affine_diffusion_3d(d,cfg.smooth,0.1,1,1);
-                end
-            case 'R'
-                d = reshape(RHO_t(:,t2),n);
+            case {'D', 'R'}
+                d = reshape(RHO_t(:,t2+1),n); % Use t2+1 because RHO_t includes the initial state at column 1
         end
         
         if glacfg.minIm0
@@ -348,7 +390,7 @@ end
 fid = fopen(sprintf('%s/%s/%s_record_%s_%s.txt',cfg.out_dir,outdir,cfg.tag,paper_fig_str,date_str),'a+');
 fprintf(fid,'%s/%s/%s_record_%s_%s\noutdir-long: %s',cfg.out_dir,outdir,cfg.tag,paper_fig_str,date_str,outdir_long);
 title_str = sprintf('============= initiating...\n\nLagrangian-Pathline (%s data, affSmooth = %d, dilate = %d), \nanalysis type = %s\n \nflw_type = %s, smoothv = %s, smoothp = %s, img = %s, mdt = %d(%s), %s, nEulStep= %d, \ncutoffStr = %s, concThresh = %5.4f, spdThresh = %5.4f, minIm0 = %d, %s, slTol = %d, \ndiff = %s, tj = %d, nt= %d%s_%s_%s\n\n',...
-    cfg.tag,cfg.smooth,cfg.dilate,'speedmap',glacfg.flw_type,glacfg.smoothvSTR,glacfg.smoothpSTR,glacfg.RD,glacfg.mdt,glacfg.XT,glacfg.spMSK_str,glacfg.nEulStep,glacfg.cutoff_str,glacfg.thresholds.conc,glacfg.thresholds.speed,glacfg.minIm0,glacfg.spSTRtitle,glacfg.sl_tol,sig_str,tj,nt,glacfg.do_sp_str,paper_fig_str,date_str);
+    cfg.tag,cfg.smooth,cfg.dilate,'speedmap',glacfg.flw_type,glacfg.smoothvSTR,glacfg.smoothpSTR,glacfg.RD,glacfg.mdt,glacfg.XT,glacfg.spMSK_str,glacfg.nEulStep,glacfg.cutoff_str,glacfg.thresholds.conc,glacfg.thresholds.speed,glacfg.minIm0,glacfg.spSTR,glacfg.sl_tol,sig_str,tj,nt,glacfg.do_sp_str,paper_fig_str,date_str);
 fprintf(title_str)
 
 fprintf('getting speed map...\n')

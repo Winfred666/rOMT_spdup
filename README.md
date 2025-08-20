@@ -114,10 +114,13 @@ cfg.sl_tol                        % 只保留长度多于 sl_tol 格的 pathline
 
 cfg.sp_mask_opts(1).name,path,threshold          % 隔室分析可用，进一步约束后处理的控制体，值大于 threshold 的体素考虑在 mask 内。 
 
+cfg.GLAD_timestep_factor        % pathline 位移延长，调为 1 pathline 才符合真实。
 ```
 
 
 其余 `cfg.speedmap_slice` `cfg.strid` 等，是最后可视化参数调整，如果不对，完全可以跑完 GLAD 后，将 `driver_CAA.m` 内部的绘图代码，复制到命令行中快速重跑可视化。
+
+此外在 `paramInitGLADpar.m` 中，有利用 `smoothn.m` 对速度场和 pathline 进行平滑的参数 `glacfg.Svt`， `glacfg.Svs`， `glacfg.smpTol`，速度和 pathline 不平滑可适当调大些。
 
 ### 3.2 运行
 

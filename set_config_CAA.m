@@ -85,9 +85,9 @@ case 'ours'
     
     % GLAD2 config
     % filter for GLAD pathline source points area.
-    cfg.density_percent_thres   = 16;  % Threshold to mask velocity, (e.g., 0.1 = 10% of baseline signal)
-    cfg.sp_thresh               = 16;  % MRI intensity higher than sp_thresh percentage will consider as start point.
-    cfg.GLAD_spfs               = 26;  % starting area sample interval
+    cfg.density_percent_thres   = 2;  % Threshold to mask velocity, (e.g., 0.1 = 10% of baseline signal)
+    cfg.sp_thresh               = 2;  % MRI intensity higher than sp_thresh percentage will consider as start point.
+    cfg.GLAD_spfs               = 24;  % starting area sample interval
     cfg.sl_tol                  = 1.5; %threshold for minimum Euclidean length between initial and final streamline points
 
     % masks for GLAD pathline source points area.

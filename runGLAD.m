@@ -222,7 +222,8 @@ for t1 = ti:tj:tf
         close(gcf);
     end
     % --- END OF VISUALIZATION ---
-    
+    % according to the Fisher's law, the diffuse velocity w is driven by gradient of log(density)
+    % for DTI anisotropic diffusion, still the source force is gradient of log(density), but 
     for t2 = 1:nt % integral from 1 to nt along t2.
         TIND = ((t1 - ti)/tj)*nt + t2;
         T = t1+(t2-1)*(tj/nt);
@@ -243,13 +244,50 @@ for t1 = ti:tj:tf
         v2 = reshape(u(:,2),n);
         v3 = reshape(u(:,3),n);
         
-        %add eps to d so can take log(d) and not log(0)
-        [w2,w1,w3] = gradient(log(d+2*eps));
-        u1 = v1 - cfg.sigma.*w1;
-        u2 = v2 - cfg.sigma.*w2;
-        u3 = v3 - cfg.sigma.*w3;
+        %add eps to d to prevent log(0)
         
-        du = cfg.sigma*[w1(:),w2(:),w3(:)];
+        [w2,w1,w3] = gradient(log(d+2*eps));
+        
+        % pack as N x 3 (N = prod(n))
+        N  = prod(n);
+        W  = [w1(:), w2(:), w3(:)];     % each row is ∇log d (3 vector) at a voxel
+        
+        % ensure sigma is N x 1 for broadcasting
+        if isscalar(cfg.dti_enhanced)
+            dti_enhanced = cfg.dti_enhanced * ones(N,1);
+        else
+            dti_enhanced = cfg.dti_enhanced;
+        end
+        sigma_vec = cfg.sigma * ones(N,1);
+
+        % compute anisotropic diffusive drift du = sigma * D * gradlogd
+        if ~isempty(cfg.D_tensor)
+            Dt = cfg.D_tensor; % here the gradient is not staggered.
+            if isequal(size(Dt), [3 3])         % uniform tensor
+                % N x 3 = (N x 3) * (3 x 3)^T  (either side is fine if Dt is symmetric)
+                DU = (W * Dt.') .* dti_enhanced;     % per-row scaling by sigma
+            elseif ndims(Dt)==3 && size(Dt,1)==N && all(size(Dt,2:3)==[3 3])
+                % per-voxel tensor: N x 3 x 3 times N x 3
+                % Use pagemtimes (skip first dim and mul 3x3 with 3x1) if available (R2020b+):
+                %   DU3: N x 3 x 1 = (N x 3 x 3) * (N x 3 x 1)
+                W3   = permute(W, [1 3 2]);     % N x 1 x 3
+                DU3  = pagemtimes(Dt, W3);      % N x 3 x 1
+                DU   = squeeze(DU3);            % N x 3
+                DU   = DU .* dti_enhanced;         % scale by sigma per voxel
+            else
+                error('cfg.D_tensor must be 3x3 or N x 3 x 3.');
+            end
+        else
+            % isotropic fallback: DU = sigma * ∇log d
+            DU = W .* sigma_vec;                % N x 3
+        end
+
+        % now subtract diffusive drift from the advective velocity
+        u1 = v1 - reshape(DU(:,1), n);
+        u2 = v2 - reshape(DU(:,2), n);
+        u3 = v3 - reshape(DU(:,3), n);
+
+        du = DU;
         
         switch glacfg.flw_type
             case 'vel'

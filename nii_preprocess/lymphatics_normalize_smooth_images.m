@@ -14,7 +14,7 @@ CMD=['mkdir ',lymph.dst];
 clear v_msk img_msk
 v_msk=spm_vol(lymph.msk);
 img_msk=spm_read_vols(v_msk);
-img_msk=img_msk>0;
+img_msk=img_msk>0.01;
 
 for FN=1:size(lymph.src_loc,1)
     clear fname v img img_scale mean_intensity img_norm tmp fname_out sfname_out SG;

@@ -29,11 +29,17 @@ case 'ours'
         case 'ISO'
             cfg.data_template           = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
             cfg.ROI_msk_path            = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii'; % basic mask to set control volume.
-            cfg.exclude_frames          = [4, 5, 6];
+            cfg.exclude_frames          = [4, 5, 6, 7, 8];
+            
+            % WARNING: A Nx3x3 tensor field, N=XYZ. If DTI path is set, then diffuse term (laplace matrix) will calculate using getAnisotropicDiffusion.m
+            % and dti_enhanced will be used, sigma will be ignored.
+            cfg.dti_path                = '/data/xym/DTI_data/ISO 052/dicom/out_dwi/dti_aligned/dti_tensor.mat';
         case 'KX'
             cfg.data_template           = '/data/xym/DEX_MRI/KX/KX_078/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
             cfg.ROI_msk_path            = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_brain_KX_078.nii'; % basic mask to set control volume.
-            cfg.exclude_frames          = [4, 5, 6, 27, 29, 30, 31]; % set the speeed field of exclude_frames to zero.
+            cfg.exclude_frames          = [4, 5, 6, 7, 8, 27, 29, 30, 31]; % set the speeed field of exclude_frames to zero.
+
+            cfg.dti_path                = '/data/xym/DTI_data/KX 078/dicom/out_dwi/dti_aligned/dti_tensor.mat';
         otherwise
             error('Unknown dataset postfix: %s', config_tag_postfix);
     end
@@ -48,21 +54,22 @@ case 'ours'
 
     % set rOMT parameters
     cfg.do_resize               = 1;%1;
-    cfg.size_factor             = 0.8;%0.5;
+    cfg.size_factor             = 0.5;%0.5;
     %cfg.data_index_E            = 7:30;
     
     cfg.smooth                  = 1.2; % evolution time when doing diffusion process runs.Larger t_tot values result in more smoothing. 
     % Think of it as the "exposure time" for the blurring effect.
     
-    cfg.dilate                  = 5; % dilate monitor zone, do not miss any volume.
+    cfg.dilate                  = 3; % dilate monitor zone, do not miss any volume.
     
     % set bigger if you want to use more data, e.g., 7:50 for 44 time points.
-    cfg.first_time              = 4; %9;%cfg.data_index_E(13);，do not include inject time.
+    cfg.first_time              = 7; %9;%cfg.data_index_E(13);，do not include inject time.
     cfg.time_jump               = 1; %3;
     cfg.last_time               = 31;%cfg.data_index_E(33);%;cfg.data_index_E(31);
     
     % empirically set parameters
-    cfg.sigma                   = 2e-3; % diffusion coefficient
+    cfg.dti_enhanced            = 3.0; % when use dti_path, better enhance the tensor field if Mean Diffusivity too small. 
+    cfg.sigma                   = 2e-3; % diffusion coefficient, when cfg.dti_path is set, it will become useless
     cfg.dt                      = 1.0; % 0.2;% timestep for every steps among nt*(last_time-first_time)/time_jump ,
     
     % for DCE-MRI seq, make sure dt * nt = 4 , so that velocity's unit is grid/min
@@ -74,21 +81,22 @@ case 'ours'
     cfg.gamma                   = 0.008; % rOMT R_3 loss, for spatial smoothness of velocity field.
     cfg.beta                    = 0.0001; % rOMT R_1 loss, kinetic energy of velocity field, set bigger if not stable.
     
+    % if do not have frame_number times memory, replace "parfor" in runROMT_par.m with "par", and also cancel this to get smoother result.
     cfg.reinitR                 = 1; % (No parallel version only) if do consecutively and 1 if reinitialize rho
     cfg.reInitializeU           = 1; % (No parallel version only), 1 if reinitialize u to 0 before each time step; 0 if not, unless first time step
     
-    cfg.niter_pcg               = 50; % rounds for pcg solver, set higher if Hl=-g hard to converge. together with update steps par.maxUiter;
-    cfg.maxUiter                = 25; % step for update of velocity field, set higher if convergence(see from loss figure) is hard.
+    cfg.niter_pcg               = 500; % rounds for pcg solver, set higher if Hl=-g hard to converge. together with update steps par.maxUiter;
+    cfg.maxUiter                = 40; % step for update of velocity field, set higher if convergence(see from loss figure) is hard.
     
     cfg.dTri                    = 1;%1 := 'closed', 3:= 'open' for boundary condition
     cfg.add_source              = 0; % for unbalanced rOMT.
     
     % GLAD2 config
     % filter for GLAD pathline source points area.
-    cfg.density_percent_thres   = 2;  % Threshold to mask velocity, (e.g., 0.1 = 10% of baseline signal)
+    cfg.density_percent_thres   = 2;  % Threshold to mask velocity, (e.g., 0.1 = 10% bigger than baseline signal)
     cfg.sp_thresh               = 2;  % MRI intensity higher than sp_thresh percentage will consider as start point.
-    cfg.GLAD_spfs               = 24;  % starting area sample interval
-    cfg.sl_tol                  = 1.5; %threshold for minimum Euclidean length between initial and final streamline points
+    cfg.GLAD_spfs               = 18;  % starting area sample interval
+    cfg.sl_tol                  = 1.2; %threshold for minimum Euclidean length between initial and final streamline points
 
     % masks for GLAD pathline source points area.
     %cfg.max_dpsnrv             = './data/12_MONTH_DATA/MAXpsnrv/C294_031318A_psnrv_max.nii'; %
@@ -99,7 +107,7 @@ case 'ours'
 
     cfg.integral_euler_step     = 10; % number of Eulerian steps to be taken per dt, higher for accurate.
     % trick of extend pathline: fake timestep.
-    cfg.GLAD_timestep_factor    = 2; % factor to extend the pathline length, 2.5 means 150% longer pathline.
+    cfg.GLAD_timestep_factor    = 1; % factor to extend the pathline length, 2.5 means 150% longer pathline.
 
     % visualization settings
     cfg.speedmap_slice          = 12;

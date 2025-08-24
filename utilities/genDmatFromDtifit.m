@@ -1,48 +1,60 @@
 % Add path to NIfTI toolbox if needed
-addpath('./utilities/NIfTI_analyze');
+addpath('./utilities');
 
-base_path = '/data/xym/DTI_data/ISO 052/dicom/out_dwi';
-x_range = 1:128;
-y_range = 1:128;
-z_range = 1:31;
-% Load eigenvalues
-L1 = nii2mat(fullfile(base_path, 'dti_L1.nii.gz'), x_range, y_range, z_range);
-L2 = nii2mat(fullfile(base_path, 'dti_L2.nii.gz'));
-L3 = nii2mat(fullfile(base_path, 'dti_L3.nii.gz'));
+base_path = '/data/xym/DTI_data/KX 078/dicom/out_dwi/dti_aligned';
 
-% Load eigenvectors (V1, V2, V3)
-V1 = nii2mat(fullfile(base_path, 'dti_V1.nii.gz'));
-V2 = nii2mat(fullfile(base_path, 'dti_V2.nii.gz'));
-V3 = nii2mat(fullfile(base_path, 'dti_V3.nii.gz'));
+% wasted original range in DWI space
+% x_range = 1:128;
+% y_range = 1:128;
+% z_range = 1:31;
 
-% Get image size
-[dimX, dimY, dimZ, ~] = size(V1);
+% Load eigenvectors (V1, V2, V3), should load using original method
+tensor6 = load_untouch_nii(fullfile(base_path, 'dti_tensor.nii.gz')).img;
 
-% Preallocate tensor array
-tensor = zeros(dimX, dimY, dimZ, 3, 3);
-
-% Loop over voxels
-for x = 1:dimX
-    for y = 1:dimY
-        for z = 1:dimZ
-            % Construct eigenvector matrix V (3x3)
-            V = [squeeze(V1(x,y,z,:)), squeeze(V2(x,y,z,:)), squeeze(V3(x,y,z,:))];
-            
-            % Construct diagonal eigenvalue matrix L
-            L = diag([L1(x,y,z), L2(x,y,z), L3(x,y,z)]);
-            
-            % Reconstruct tensor: D = V * L * V'
-            tensor(x,y,z,:,:) = V * L * V';
-        end
+sz = size(tensor6);
+if numel(sz) == 5
+    fprintf("Reshape tensor6 of std SANS/ITK (X x Y x Z x 1 x 6) to D_tensor (XYZ x 3 x 3)\n");
+    % Also from (X x Y x Z x 1 x 6) to (X x Y x Z x 3 x 3 for visualization)
+    if sz(5) ~= 6
+        error('tensor6 must be X x Y x Z x 1 x 6');
     end
+    % WARNING: for MRtrix lower-triangle order
+    Dxx = tensor6(:,:,:,:,1); % Dxx
+    Dxy = tensor6(:,:,:,:,2); % Dxy
+    Dyy = tensor6(:,:,:,:,3); % Dyy
+    Dxz = tensor6(:,:,:,:,4); % Dxz
+    Dyz = tensor6(:,:,:,:,5); % Dyz
+    Dzz = tensor6(:,:,:,:,6); % Dzz
+elseif numel(sz) == 4
+    fprintf("Reshape tensor of dtifit X x Y x Z x 6 to D_tensor\n");
+    if sz(4) ~= 6
+        error('tensor6 must be X x Y x Z x 6');
+    end
+    % WARNING: for Dtifit upper-triangle order 
+    Dxx = tensor6(:,:,:,1);
+    Dxy = tensor6(:,:,:,2);
+    Dxz = tensor6(:,:,:,3);
+    Dyy = tensor6(:,:,:,4);
+    Dyz = tensor6(:,:,:,5);
+    Dzz = tensor6(:,:,:,6);
 end
 
-D_tensor = tensor;
 
-save(fullfile(base_path,'DTI_tensor_3_3.mat'), 'D_tensor', '-v7.3');
+D_tensor_5D = zeros(sz(1), sz(2), sz(3), 3, 3, 'like', tensor6);
+D_tensor_5D(:,:,:,1,1) = Dxx;
+D_tensor_5D(:,:,:,2,2) = Dyy;
+D_tensor_5D(:,:,:,3,3) = Dzz;
+D_tensor_5D(:,:,:,1,2) = Dxy;
+D_tensor_5D(:,:,:,2,1) = Dxy;
+D_tensor_5D(:,:,:,1,3) = Dxz;
+D_tensor_5D(:,:,:,3,1) = Dxz;
+D_tensor_5D(:,:,:,2,3) = Dyz;
+D_tensor_5D(:,:,:,3,2) = Dyz;
 
-[dimX, dimY, dimZ, ~, ~] = size(tensor);
-N = dimX * dimY * dimZ;
-D_tensor = reshape(tensor, [N, 3, 3]);  % reshape to N x 3 x 3
+D_tensor = D_tensor_5D;
+% PIC , cell centered , not staggered.
+save(fullfile(base_path, 'dti_tensor_3_3.mat'), 'D_tensor');
 
-save(fullfile(base_path,'DTI_tensor.mat'), 'D_tensor', '-v7.3');
+% Fill 3x3 tensor for each voxel
+D_tensor = reshape(D_tensor_5D, [], 3, 3); % (XYZ) x 3 x 3
+save(fullfile(base_path, 'dti_tensor.mat'), 'D_tensor');

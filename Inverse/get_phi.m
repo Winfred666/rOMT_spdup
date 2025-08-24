@@ -10,8 +10,8 @@ loss_mk = par.beta*mk;
 
 loss_phiN  = 0.5*norm(rho(:,end) - par.drhoN)^2;
 
-%% smoothing deformation field
-%
+%% smoothing deformation field 
+% (just use Grad, nothing to do with anisotropic diffusion)
 Ru = 0;
 if par.gamma~=0
     uvec=vec2mat(u(:),par.dim*nt);

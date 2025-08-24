@@ -16,7 +16,7 @@ for i = 1:nt
     % Sensitivity:
     if  i>1
         for j = 1:i-1
-            [sensx(:,j),pcgflag2] = pcg(par.B,M.S{i}*sensx(:,j));
+            [sensx(:,j),pcgflag2] = pcg(par.B,M.S{i}*sensx(:,j), 1e-6, 20,par.L_B, par.L_B');
             if pcgflag2 ~= 0
                 warning('MATLAB:pcgExitFlag','Warning: get_drNduTdrNdu3.m >>> while finding drho(:,n)/du_%d, pcg exit pcgflag2 = %d',j,pcgflag2)
             end
@@ -27,7 +27,7 @@ for i = 1:nt
     elseif par.dim==3
         y1 = [M.Tx{i},M.Ty{i},M.Tz{i}]*(dt*X(:,i));    
     end
-    [sensx(:,i),pcgflag3] = pcg(par.B,y1);
+    [sensx(:,i),pcgflag3] = pcg(par.B,y1, 1e-6, 20, par.L_B, par.L_B');
     if pcgflag3 ~= 0
         warning('MATLAB:pcgExitFlag','Warning: get_drNduTdrNdu3.m >>> while finding drho(:,%d)/du, pcg exit pcgflag3 = %d',i,pcgflag3)
     end
@@ -43,7 +43,7 @@ sensTx             = zeros(par.dim*prod(n),nt);
 
 for i = nt:-1:1
     % Sensitivity:          
-    [sensI,pcgflag1]   = pcg(par.B',sens);
+    [sensI,pcgflag1]   = pcg(par.B',sens, 1e-6, 20, par.L_B', par.L_B);
     if pcgflag1 ~= 0
         warning('MATLAB:pcgExitFlag','Warning: get_drNduTdrNdu3.m >>> while finding drho_%dT/du, pcg exit flag1 = %d',i,pcgflag1)
     end

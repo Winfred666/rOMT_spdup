@@ -15,6 +15,17 @@ if ~isfield(cfg, 'exclude_frames')
     cfg.exclude_frames = [];
 end
 
+if isfield(cfg, 'dti_path') && isfield(cfg, 'stagger_dti_path')
+    cfg.D_tensor = load(cfg.dti_path, 'D_tensor').D_tensor;
+    if cfg.do_resize
+        cfg.D_tensor = resizeDTIMatrix(cfg.D_tensor, round(cfg.size_factor.*size(cfg.D_tensor,1:3)),'linear');
+    end
+    % cfg.stagger_D_tensor = load(cfg.stagger_dti_path, 'stagger_D_tensor').stagger_D_tensor;
+    fprintf("Loaded DTI tensor from: %s\n", cfg.dti_path);
+else
+    cfg.D_tensor = []; % to trigger isempty and get isotropic laplace matrix in tryGetAnisotropicDiffusion.m
+end
+
 % load ROI
 if cfg.do_ROI_msk
     tmp = nii2mat(cfg.ROI_msk_path,cfg.x_range,cfg.y_range,cfg.z_range);
@@ -74,6 +85,11 @@ cfg.true_size               = round(cfg.size_factor*[length(cfg.x_range),length(
 cfg.version                 = sprintf('diff_%s_tj_%d_dt_%2.1f_nt_%d_ti_%d_tf_%d_uini_0_beta_%5.4f_R_gamma_%4.3f_dtri%d_rsmooth%d_rreinit%d_source%d_dilate%d_pcg%d',...
                                 cfg.sig_str,cfg.time_jump,cfg.dt,cfg.nt,cfg.first_time,cfg.last_time,cfg.beta,cfg.gamma,cfg.dTri,cfg.smooth,cfg.reinitR,cfg.add_source,cfg.dilate,cfg.niter_pcg);
 cfg.out_dir                 = sprintf('./test_results/%s/%s',cfg.tag,cfg.version);
+
+% broadcast dti_enhanced, there is not staggerred face-centered, only cell-centered
+cfg.dti_enhanced = repmat(double(cfg.dti_enhanced), prod(cfg.true_size), 1);
+
+
 
 for i = 1:global_steps
     cfg.vol(i).data = vol_tmp{i};
@@ -205,35 +221,7 @@ grid off, box off, axis image
 xlabel('x-axis','FontSize',cfg.vis_font_size),ylabel('y-axis','FontSize',cfg.vis_font_size),zlabel('z-axis','FontSize',cfg.vis_font_size)
 
 
-% Create a modified colormap with clear distinction at Pe = 1
-num_colors = 256; % Standard colormap size
-cmap = zeros(num_colors, 3);
-
-% Calculate the split point where Pe = 1
-% Assuming clim range [0, 800], Pe = 1 corresponds to index: 1/800 * num_colors
-split_idx = round((1/800) * num_colors);
-if split_idx < 1, split_idx = 1; end
-if split_idx > num_colors, split_idx = num_colors; end
-
-% Diffusion-dominated region (Pe < 1): Blue gradient
-% From dark blue to light blue
-blue_colors = split_idx;
-for i = 1:blue_colors
-    intensity = i / blue_colors; % 0 to 1
-    cmap(i, :) = [0, 0, 0.3 + 0.7*intensity]; % Dark blue to bright blue
-end
-
-% Advection-dominated region (Pe > 1): Red-Yellow gradient  
-% From yellow to red
-red_colors = num_colors - split_idx;
-if red_colors > 0
-    for i = 1:red_colors
-        intensity = i / red_colors; % 0 to 1
-        cmap(split_idx + i, :) = [1, 1 - 0.9*intensity, 0]; % Yellow to red
-    end
-end
-
-colormap(cmap); % Apply the modified colormap
+colormap(jet); % Apply the modified colormap
 
 % Set a fixed color range for the Peclet number to avoid outliers washing
 % out the map. A range is chosen because Pe=1 is the critical
@@ -259,13 +247,6 @@ set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1
 cb = colorbar;
 cb.Label.String = 'Peclet Number (Pe)';
 cb.Label.FontSize = cfg.vis_font_size;
-
-% Add a custom tick at Pe = 1 to highlight the transition
-current_ticks = cb.Ticks;
-if ~ismember(1, current_ticks)
-    new_ticks = sort([current_ticks, 1]);
-    cb.Ticks = new_ticks;
-end
 
 grid on,
 
@@ -324,7 +305,7 @@ colormap(jet);
 % Set a fixed color range for the speed map to [0, 1] to ensure
 % consistency across different datasets and prevent high-velocity outliers
 % from dominating the color scale.
-clim([0, 0.3]);
+clim([0, 0.8]);
 
 axis tight; % Use 'axis tight' to preserve the aspect ratio
 xlim(x_plot_lims);

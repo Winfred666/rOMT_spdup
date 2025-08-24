@@ -7,7 +7,10 @@ function dRdu=get_dRudu(u,nt,par)
 %R(u)=||grad(u)||^2
 
 %% 2D/3D verison
-G=par.Grad'*par.Grad;%G=-par.Grad'*par.Grad;
+% Laplacian is the derivative of gradient: naturally appears as the Euler–Lagrange operator of your functional
+% If you define Grad as forward differences, 
+% then Grad'*Grad is negative definite and corresponds to -Δ.
+G=par.Grad'*par.Grad; %G=-par.Grad'*par.Grad;
 U=vec2mat(u(:),par.dim*nt);
 dRdu=G*U;
 dRdu=dRdu(:)';

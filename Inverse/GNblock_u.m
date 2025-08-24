@@ -60,27 +60,48 @@ for i = 1:par.maxUiter
             U1 = reshape(U(1:prod(par.n),k),par.n');
             U2 = reshape(U(prod(par.n)+1:2*prod(par.n),k),par.n');
             U3 = reshape(U(2*prod(par.n)+1:end,k),par.n');
+            % using the current estimate of the advection field (U1, U2, U3) to compute the components of a linearized advection operator.
             [M.S{k},M.Tx{k},M.Ty{k},M.Tz{k}]  = dTrilinears3d(RHO0(:,k),par.Xc + dt*U1, par.Yc + dt*U2, par.Zc + dt*U3,...
                              par.h1(1),par.h2(1),par.h3(1),par.bc);
         end
     else
         warning('In GNblock_u.m: dimension of data should be either 2 or 3')
-    end   
-    
-    for      j = 1:nt
+    end
+
+    for j = 1:nt
              dmk2(:,1:j) = dmk2(:,1:j) + reshape(par.hd*dt*get_drNduT4(M,j,dt,par,A*(U(:,j).*U(:,j))),par.dim*prod(par.n),j);
     end
     
     g        = (par.beta*2*par.hd*dt*Rho(:)'*Abig*sdiag(u(:)))' + par.beta*dmk2(:) + ...
-                get_drNduT4(M,nt,dt,par,Rho(:,end) - par.drhoN) + par.gamma*dt*par.hd*get_dRudu(u,nt,par)';
+                get_drNduT4(M,nt,dt,par,Rho(:,end) - par.drhoN) + ...
+                par.gamma*dt*par.hd*get_dRudu(u,nt,par)';
 
-    fprintf('%3d.%d\t      %3.2e \t     ||g|| = %3.2e\n',i,0,phi,norm(g));
+    fprintf('%3d.%d\t      %3.2e \t     ||g|| = %3.2e\t %s \n',i,0,phi,norm(g),tag_str);
 
-    H13       = par.beta*2*dt*par.hd*sdiag(Rho(:)'*Abig) + par.gamma*dt*par.hd.*kron(speye(nt*par.dim),(par.Grad)'*par.Grad);
+    H_diag = par.beta*2*dt*par.hd*sdiag(Rho(:)'*Abig);
+    H_laplacian_unscaled = kron(speye(nt*par.dim), (par.Grad)'*(par.Grad));
+    
+    % for gamma, just pure laplace
+    H13       = H_diag + ...
+                par.gamma*dt*par.hd.* ...
+                H_laplacian_unscaled;
+    
     H        = @(x) H13*x + get_drNduTdrNdu3(M,nt,dt,par,x);                           
     
-    [s,pcgflag,relres,iter]    = pcg(H,-g,0.01,par.niter_pcg);
+    % We add a small identity matrix (regularization) to guarantee M is
+    % positive definite with heuristic magnification for laplacian, which is crucial for ichol.
+    M_hybrid = H_diag + 0.1 * H_laplacian_unscaled;
+    fprintf('Computing Hybrid Preconditioner...\t %s\n', tag_str);
+    opts.type = 'ict';
+    opts.droptol = 1e-3;
+    opts.diagcomp = 0.1; % Use robust ichol
+    L_hybrid = ichol(M_hybrid, opts);
+    fprintf('Finish computing Hybrid Preconditioner.\t %s\n', tag_str);
     
+    [s,pcgflag,relres,iter]    = pcg(H, -g, 0.01, par.niter_pcg, L_hybrid, L_hybrid');
+    
+    fprintf("Finish Hx=-g pcg.\t %s\n", tag_str);
+
     dir_deriv = s'*g; % here s is the search direction, g is the gradient direction, need descent direction
     if dir_deriv >= 0
         fprintf('Warning: Search direction is not a descent direction (s''*g = %e). Reverting to gradient descent.\n', dir_deriv);
@@ -108,7 +129,7 @@ for i = 1:par.maxUiter
         muls = muls/2; lsiter = lsiter+1;
         
         % fail if small step still cannot improve, move toward a local minima or wrong direction
-        if lsiter > 16
+        if lsiter > 40
             fprintf('LSB\n');
             % ut = u;  Do not use an illegal update of ut.   
             flag = 1;
@@ -144,6 +165,11 @@ title('MKdist Term (mk)');
 ylabel('Loss');
 grid on;
 set(gca, 'YScale', 'log');
+% Add data labels to each point
+x_data_mk = 1:length(loss_history.mk);
+for idx = 1:length(x_data_mk)
+    text(x_data_mk(idx), loss_history.mk(idx), ['  ' num2str(loss_history.mk(idx), '%.2e')], 'FontSize', 8, 'VerticalAlignment', 'middle');
+end
 
 % Subplot 2: Image Mismatch Term
 subplot(3, 1, 2);
@@ -154,6 +180,11 @@ title('Image Mismatch Term (phiN)');
 ylabel('Loss');
 grid on;
 set(gca, 'YScale', 'log');
+% Add data labels to each point
+x_data_phiN = 1:length(loss_history.phiN);
+for idx = 1:length(x_data_phiN)
+    text(x_data_phiN(idx), loss_history.phiN(idx), ['  ' num2str(loss_history.phiN(idx), '%.2e')], 'FontSize', 8, 'VerticalAlignment', 'middle');
+end
 
 % Subplot 3: Regularization Term
 subplot(3, 1, 3);
@@ -164,6 +195,11 @@ xlabel('Optimization Step');
 ylabel('Loss');
 grid on;
 set(gca, 'YScale', 'log');
+% Add data labels to each point
+x_data_Ru = 1:length(loss_history.Ru);
+for idx = 1:length(x_data_Ru)
+    text(x_data_Ru(idx), loss_history.Ru(idx), ['  ' num2str(loss_history.Ru(idx), '%.2e')], 'FontSize', 8, 'VerticalAlignment', 'middle');
+end
 
 % Add a main title
 sgtitle(sprintf('Loss Components During Optimization: %s', tag_str), 'Interpreter', 'none');

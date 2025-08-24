@@ -21,9 +21,14 @@ u                  = reshape(u,2*prod(n),nt);
 if isfield(par,'B')
     B = par.B;
 else
-    Mdis = - par.sigma*(par.Grad)'*par.Grad;  % change to add variable sigma
+    % repalce all grad with anitropic diffusicity gradiant.
+    Mdis = tryGetAnisotropicDiffusion(par.Grad, par.sigma, par.D_tensor, par.dti_enhanced);  % change to add variable sigma
     I    = speye(prod(n));
-    B    = I - Mdis;
+    B    = I - dt * Mdis; % dt equals to 1.
+    opts.type = 'ict';
+    opts.droptol = 1e-3;
+    opts.diagcomp = 0.1;
+    par.L_B = ichol(B, opts);
 end
 rho(:,1)           = rho0;
 
@@ -47,8 +52,8 @@ for i = 2:nt+1
     end
     
     % diffusion step
-       
-    [rho(:,i),pcgflag]  = pcg(B,rho(:,i));
+    
+    [rho(:,i),pcgflag]  = pcg(B,rho(:,i), 1e-6, 20, par.L_B, par.L_B');
     if pcgflag ~= 0
         warning('MATLAB:pcgExitFlag','Warning: advecDiff.m >>> while finding rho(:,%d), pcg exit flag = %d',i,pcgflag)
     end
@@ -70,10 +75,15 @@ u                  = reshape(u,3*prod(n),nt);
 if isfield(par,'B')
     B = par.B;
 else
-    Mdis = - par.sigma*(par.Grad)'*par.Grad;  % change to add variable sigma
+    Mdis = tryGetAnisotropicDiffusion(par.Grad, par.sigma, par.D_tensor, par.dti_enhanced);  % change to add variable sigma
     I    = speye(prod(n));
-    B    = I - Mdis;
+    B    = I - dt * Mdis;
+    opts.type = 'ict';
+    opts.droptol = 1e-3;
+    opts.diagcomp = 0.1;
+    par.L_B = ichol(B, opts);
 end
+
 rho(:,1)           = rho0;
 
 for i = 2:nt+1
@@ -98,7 +108,7 @@ for i = 2:nt+1
     
     % diffusion step
        
-    [rho(:,i),pcgflag]  = pcg(B,rho(:,i));
+    [rho(:,i),pcgflag]  = pcg(B,rho(:,i), 1e-6, 20, par.L_B, par.L_B');
     if pcgflag ~= 0
         warning('MATLAB:pcgExitFlag','Warning: advecDiff.m >>> while finding rho(:,%d), pcg exit flag = %d',i,pcgflag)
     end

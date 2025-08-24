@@ -102,7 +102,7 @@ switch cfg.dTri
 end
 [cfg.Xc,cfg.Yc,cfg.Zc] = getCellCenteredGrid(cfg.h1,cfg.h2,cfg.h3);
 cfg.Grad = getCellCenteredGradMatrix({'ccn' 'ccn' 'ccn'},cfg.h1,cfg.h2,cfg.h3);
-Mdis = -cfg.sigma.*cfg.Grad'*cfg.Grad;
+Mdis = tryGetAnisotropicDiffusion(cfg.Grad, cfg.sigma, cfg.D_tensor, cfg.dti_enhanced);
 %initialize streamlines:
 nsp = length(sx);
 %convert from matlab grid to cell-centered grid:

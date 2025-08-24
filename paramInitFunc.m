@@ -23,7 +23,7 @@ if par.dim==2
     [Xc, Yc] = getCellCenteredGrid(h1,h2);
     BC = {'ccn' 'ccn'};
     Grad = getCellCenteredGradMatrix(BC,h1,h2);                
-    Mdis = -sigma*(Grad')*Grad;
+    Mdis = tryGetAnisotropicDiffusion(Grad, sigma, cfg.D_tensor, cfg.dti_enhanced);
     I = speye(prod(n));
     par.h1 = h1; par.h2 = h2;
     par.hd = h1(1)*h2(1);
@@ -35,7 +35,7 @@ elseif par.dim==3
     [Xc, Yc, Zc] = getCellCenteredGrid(h1,h2,h3);
     BC = {'ccn' 'ccn' 'ccn'};
     Grad = getCellCenteredGradMatrix(BC,h1,h2,h3);                
-    Mdis = -sigma*(Grad')*Grad;
+    Mdis = tryGetAnisotropicDiffusion(Grad, sigma, cfg.D_tensor, cfg.dti_enhanced);
     I = speye(prod(n));
     par.h1 = h1; par.h2 = h2; par.h3 = h3;
     par.hd = h1(1)*h2(1)*h3(1);
@@ -54,8 +54,25 @@ par.dt    = dt;
 par.nt    = nt;
 par.sigma = sigma;
 par.Grad  = Grad;
-par.B     = I - dt*Mdis;
+par.B     = I - dt*Mdis; % WARNING: this is the discrete Laplace matrix field, or L in the pdf note
 
+if issymmetric(par.B)
+    disp('Good! Matrix B is symmetric.');
+else
+    disp('ERROR: Matrix B is NOT symmetric!!!!');
+end
+
+disp('Pre-computing preconditioners for B...');
+opts.type = 'ict';
+opts.droptol = 1e-3;
+opts.diagcomp = 0.1;
+% B is an anisotropic Laplacian containing DTI, still symmetric
+par.L_B = ichol(par.B, opts);
+disp('Successfully computed preconditioner B for diffuse part.');
+
+par.dti_enhanced = cfg.dti_enhanced; % if cfg.dti_enhanced is set, then it will be used to enhance the DTI tensor field
+par.D_tensor = cfg.D_tensor; % DTI tensor, if empty [], isotropic laplace matrix will be used
+% par.stagger_D_tensor = cfg.stagger_D_tensor; % as complement.
 
 if add_source
     % Placeholder for source initialization if needed

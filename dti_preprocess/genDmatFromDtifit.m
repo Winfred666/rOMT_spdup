@@ -1,7 +1,7 @@
 % Add path to NIfTI toolbox if needed
-addpath('./utilities');
+% addpath('./utilities');
 
-base_path = '/data/xym/DTI_data/KX 078/dicom/out_dwi/dti_aligned';
+% base_path = '/data/xym/DTI_data/KX 078/dicom/out_dwi/dti_aligned';
 
 % wasted original range in DWI space
 % x_range = 1:128;

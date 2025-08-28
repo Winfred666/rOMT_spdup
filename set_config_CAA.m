@@ -29,7 +29,7 @@ case 'ours'
         case 'ISO'
             cfg.data_template           = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
             cfg.ROI_msk_path            = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii'; % basic mask to set control volume.
-            cfg.exclude_frames          = [4, 5, 6, 7, 8];
+            cfg.exclude_frames          = [4, 5, 6, 7, 8, 30, 31];
             
             % WARNING: A Nx3x3 tensor field, N=XYZ. If DTI path is set, then diffuse term (laplace matrix) will calculate using getAnisotropicDiffusion.m
             % and dti_enhanced will be used, sigma will be ignored.
@@ -37,7 +37,7 @@ case 'ours'
         case 'KX'
             cfg.data_template           = '/data/xym/DEX_MRI/KX/KX_078/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
             cfg.ROI_msk_path            = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_brain_KX_078.nii'; % basic mask to set control volume.
-            cfg.exclude_frames          = [4, 5, 6, 7, 8, 27, 29, 30, 31]; % set the speeed field of exclude_frames to zero.
+            cfg.exclude_frames          = [4, 5, 6, 7, 8, 27, 28, 29, 30, 31]; % set the speeed field of exclude_frames to zero.
 
             cfg.dti_path                = '/data/xym/DTI_data/KX 078/dicom/out_dwi/dti_aligned/dti_tensor.mat';
         otherwise
@@ -46,7 +46,7 @@ case 'ours'
 
     % basic mask for setting control volume + background anatomy image.
     cfg.do_ROI_msk              = 1;
-    cfg.ROI_msk_threshold       = 0.01; % threshold for mask, if msk = raw_msk>0 cause problem.
+    cfg.ROI_msk_threshold       = 0.02; % threshold for mask, if msk = raw_msk>0 cause problem.
     
     cfg.x_range                 = 1:128;
     cfg.y_range                 = 1:160;
@@ -54,21 +54,21 @@ case 'ours'
 
     % set rOMT parameters
     cfg.do_resize               = 1;%1;
-    cfg.size_factor             = 0.5;%0.5;
+    cfg.size_factor             = 0.6;%0.5;
     %cfg.data_index_E            = 7:30;
     
-    cfg.smooth                  = 1.2; % evolution time when doing diffusion process runs.Larger t_tot values result in more smoothing. 
+    cfg.smooth                  = 1.8; % evolution time when doing diffusion process runs.Larger t_tot values result in more smoothing. 
     % Think of it as the "exposure time" for the blurring effect.
     
-    cfg.dilate                  = 3; % dilate monitor zone, do not miss any volume.
+    cfg.dilate                  = 0; % dilate monitor zone, more like exploring dirichlet boundary.
     
     % set bigger if you want to use more data, e.g., 7:50 for 44 time points.
-    cfg.first_time              = 7; %9;%cfg.data_index_E(13);，do not include inject time.
+    cfg.first_time              = 9; %9;%cfg.data_index_E(13);，do not include inject time.
     cfg.time_jump               = 1; %3;
-    cfg.last_time               = 31;%cfg.data_index_E(33);%;cfg.data_index_E(31);
+    cfg.last_time               = 26;%cfg.data_index_E(33);%;cfg.data_index_E(31);
     
     % empirically set parameters
-    cfg.dti_enhanced            = 3.0; % when use dti_path, better enhance the tensor field if Mean Diffusivity too small. 
+    cfg.dti_enhanced            = 2.0; % when use dti_path, better enhance the tensor field if Mean Diffusivity too small. 
     cfg.sigma                   = 2e-3; % diffusion coefficient, when cfg.dti_path is set, it will become useless
     cfg.dt                      = 1.0; % 0.2;% timestep for every steps among nt*(last_time-first_time)/time_jump ,
     
@@ -84,23 +84,23 @@ case 'ours'
     % if do not have frame_number times memory, replace "parfor" in runROMT_par.m with "par", and also cancel this to get smoother result.
     cfg.reinitR                 = 1; % (No parallel version only) if do consecutively and 1 if reinitialize rho
     cfg.reInitializeU           = 1; % (No parallel version only), 1 if reinitialize u to 0 before each time step; 0 if not, unless first time step
-    
-    cfg.niter_pcg               = 500; % rounds for pcg solver, set higher if Hl=-g hard to converge. together with update steps par.maxUiter;
-    cfg.maxUiter                = 40; % step for update of velocity field, set higher if convergence(see from loss figure) is hard.
+
+    cfg.niter_pcg               = [550, 900]; % rounds for pcg solver, will start from 25 and exponentially grow up if LSB, set higher if Hl=-g hard to converge. together with update steps par.maxUiter;
+    cfg.maxUiter                = 22; % step for update of velocity field, set higher if convergence(see from loss figure) is hard.
     
     cfg.dTri                    = 1;%1 := 'closed', 3:= 'open' for boundary condition
     cfg.add_source              = 0; % for unbalanced rOMT.
     
     % GLAD2 config
     % filter for GLAD pathline source points area.
-    cfg.density_percent_thres   = 2;  % Threshold to mask velocity, (e.g., 0.1 = 10% bigger than baseline signal)
-    cfg.sp_thresh               = 2;  % MRI intensity higher than sp_thresh percentage will consider as start point.
-    cfg.GLAD_spfs               = 18;  % starting area sample interval
-    cfg.sl_tol                  = 1.2; %threshold for minimum Euclidean length between initial and final streamline points
+    cfg.density_percent_thres   = 8;  % Threshold to mask velocity, (e.g., 0.1 = 10% bigger than baseline signal)
+    cfg.sp_thresh               = 8;  % MRI intensity higher than sp_thresh percentage will consider as start point.
+    cfg.GLAD_spfs               = 22;  % starting area sample interval
+    cfg.sl_tol                  = 0.8; %threshold for minimum Euclidean length between initial and final streamline points
 
     % masks for GLAD pathline source points area.
     %cfg.max_dpsnrv             = './data/12_MONTH_DATA/MAXpsnrv/C294_031318A_psnrv_max.nii'; %
-    cfg.sp_mask_opts(1).name    = 'brain'; % name of the mask, activate it by delete "_disabled". 
+    cfg.sp_mask_opts(1).name    = 'brain_disabled'; % name of the mask, activate it by delete "_disabled". 
     cfg.sp_mask_opts(1).path    =  cfg.ROI_msk_path; %'./data/12_MONTH_DATA/12months_mask_brainCSF/C294.nii';
     cfg.sp_mask_opts(1).threshold = 0.01; % for tissue probability mask, 0.5 is standard for CFS/W/G area.
     % update step
@@ -161,7 +161,7 @@ case 'C294'
     cfg.gamma                   = 0.008;
     cfg.beta                    = 0.0001;
     cfg.reInitializeU           = 1; % (No parallel version only), leverage phi field from last step for better convergence.
-    cfg.niter_pcg               = 20;%20;
+    cfg.niter_pcg               = [20, 50];%20;
     cfg.maxUiter                = 25; % step for update of velocity field, set higher if convergence is hard.
 
     cfg.dTri                    = 1;%1 := 'closed', 3:= 'open' for boundary condition

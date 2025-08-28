@@ -76,6 +76,10 @@ for i = 1:par.maxUiter
                 get_drNduT4(M,nt,dt,par,Rho(:,end) - par.drhoN) + ...
                 par.gamma*dt*par.hd*get_dRudu(u,nt,par)';
 
+    if isfield(par, 'mask_full') && ~isempty(par.mask_full)
+        g = g .* par.mask_full; % mask out the gradient outside of brain
+    end
+
     fprintf('%3d.%d\t      %3.2e \t     ||g|| = %3.2e\t %s \n',i,0,phi,norm(g),tag_str);
 
     H_diag = par.beta*2*dt*par.hd*sdiag(Rho(:)'*Abig);
@@ -90,7 +94,7 @@ for i = 1:par.maxUiter
     
     % We add a small identity matrix (regularization) to guarantee M is
     % positive definite with heuristic magnification for laplacian, which is crucial for ichol.
-    M_hybrid = H_diag + 0.1 * H_laplacian_unscaled;
+    M_hybrid = H_diag + 0.6 * H_laplacian_unscaled;
     fprintf('Computing Hybrid Preconditioner...\t %s\n', tag_str);
     opts.type = 'ict';
     opts.droptol = 1e-3;
@@ -98,51 +102,82 @@ for i = 1:par.maxUiter
     L_hybrid = ichol(M_hybrid, opts);
     fprintf('Finish computing Hybrid Preconditioner.\t %s\n', tag_str);
     
-    [s,pcgflag,relres,iter]    = pcg(H, -g, 0.01, par.niter_pcg, L_hybrid, L_hybrid');
-    
-    fprintf("Finish Hx=-g pcg.\t %s\n", tag_str);
+    % --- Adaptive PCG and Line Search Loop ---
+    s_guess = []; % Initial guess for PCG, empty for the first attempt
+    found_step = false; % Flag to indicate if a successful step was found
+    current_niter = 0;
 
-    dir_deriv = s'*g; % here s is the search direction, g is the gradient direction, need descent direction
-    if dir_deriv >= 0
-        fprintf('Warning: Search direction is not a descent direction (s''*g = %e). Reverting to gradient descent.\n', dir_deriv);
-        s = -g; % back to gradient descent
+    for k = 1:length(par.niter_pcg)
+        last_niter = current_niter;
+        current_niter = par.niter_pcg(k);
+        fprintf('--- Attempting PCG with max_iter = %d ---\n', current_niter);
+
+        % Solve H*s = -g using PCG. Use s_guess from previous attempt.
+        [s, pcgflag, relres, iter] = pcg(H, -g, 0.01, current_niter - last_niter, L_hybrid, L_hybrid', s_guess);
+        
+        % Update the guess for the next potential, more intensive, attempt
+        s_guess = s;
+
+        fprintf("Finish Hx=-g pcg. Flag=%d, RelRes=%e, Iter=%d \t%s\n", pcgflag, relres, iter, tag_str);
+
         dir_deriv = s'*g;
+        if dir_deriv >= 0
+            fprintf('Warning: Search direction is not a descent direction (s''*g = %e). Reverting to gradient descent.\n', dir_deriv);
+            s = -g;
+            dir_deriv = s'*g;
+        end
+
+        % if pcgflag ~= 0
+        %     fprintf('MATLAB:pcgExitFlag','Warning: GNblock_u.m >>> iter %d, while finding s, pcg exit flag = %d \nrelres = %3.2e, iter = %d, %s',i,pcgflag,relres,iter,tag_str)
+        % end
+        
+        % --- Line Search ---
+        muls = 0.5;
+        lsiter = 1;
+        line_search_failed = false;
+        while 1
+            ut = u(:) + muls*s;
+            [phit, mk_t, phiN_t, Ru_t] = get_phi(Rho_i, ut, par);
+            fprintf('%3d.%d\t      %3.2e \t     phit  = %3.2e        %s\n', i, lsiter, phi, phit, tag_str);
+            
+            if phit < phi + 5e-3 * muls * dir_deriv
+                % could probe further until phit grow.
+                found_step = true; % Success!
+                break;
+            end
+            muls = muls/2;
+            lsiter = lsiter + 1;
+            if i < 5
+                max_lsiter = 10;
+            elseif i < 12
+                max_lsiter = 20;
+            else
+                max_lsiter = 30;
+            end
+            if lsiter > max_lsiter
+                fprintf('Line search failed for PCG with %d iters. Trying more PCG iters...\n', current_niter);
+                line_search_failed = true;
+                break; % Exit line search and try next PCG iteration count
+            end
+        end
+
+        if found_step
+            break; % A good step was found, exit the adaptive PCG loop
+        end
     end
 
-    if pcgflag ~= 0
-      warning('MATLAB:pcgExitFlag','Warning: GNblock_u.m >>> iter %d, while finding s, pcg exit flag = %d \nrelres = %3.2e, iter = %d, %s',i,pcgflag,relres,iter,tag_str)
+    % If the line search still failed after the last attempt, then set the final failure flag.
+    if line_search_failed && ~found_step
+        fprintf('LSB: Line search failed even with max PCG iterations (%d).\n', current_niter);
+        flag = 1;
     end
+    % --- End of Adaptive PCG and Line Search ---
     
-    muls     = 0.5; % initial step size for line search
-    lsiter = 1;
-    while 1
-        ut   = u(:) + muls*s;
-        
-        [phit, mk_t, phiN_t, Ru_t] = get_phi(Rho_i,ut,par);
-        
-        fprintf('%3d.%d\t      %3.2e \t     phit  = %3.2e        %s\n',i,lsiter,phi,phit,tag_str);
-        
-        % test for line search termination
-        if phit < phi + 1e-4*muls*dir_deriv %1e-4*s'*g , Use Wolfe/Armijo condition with smaller muls, then this update is success
-            break;                      %breaks while loop entirely (and goes to next statement after end of while loop)
-        end
-        muls = muls/2; lsiter = lsiter+1;
-        
-        % fail if small step still cannot improve, move toward a local minima or wrong direction
-        if lsiter > 40
-            fprintf('LSB\n');
-            % ut = u;  Do not use an illegal update of ut.   
-            flag = 1;
-            break; % Use break instead of return to allow saving history
-        end
-    end
-    
-    % --- MODIFICATION: Record the loss components from the successful step ---
+    % --- Record the loss components from the successful step ---
     loss_history.mk(end+1) = mk_t;
     loss_history.phiN(end+1) = phiN_t;
     loss_history.Ru(end+1) = Ru_t;
     loss_history.total(end+1) = phit;
-    % --- END MODIFICATION ---
 
     if flag
         break; % Use break instead of return (must leave an LSB output)
@@ -165,10 +200,10 @@ title('MKdist Term (mk)');
 ylabel('Loss');
 grid on;
 set(gca, 'YScale', 'log');
-% Add data labels to each point
+% Add data labels to each point, showing one label every 4 steps
 x_data_mk = 1:length(loss_history.mk);
-for idx = 1:length(x_data_mk)
-    text(x_data_mk(idx), loss_history.mk(idx), ['  ' num2str(loss_history.mk(idx), '%.2e')], 'FontSize', 8, 'VerticalAlignment', 'middle');
+for idx = 1:4:length(x_data_mk)
+    text(x_data_mk(idx), loss_history.mk(idx), num2str(loss_history.mk(idx), '%.2e'), 'FontSize', 8, 'VerticalAlignment', 'bottom', 'HorizontalAlignment', 'center');
 end
 
 % Subplot 2: Image Mismatch Term
@@ -180,10 +215,9 @@ title('Image Mismatch Term (phiN)');
 ylabel('Loss');
 grid on;
 set(gca, 'YScale', 'log');
-% Add data labels to each point
 x_data_phiN = 1:length(loss_history.phiN);
-for idx = 1:length(x_data_phiN)
-    text(x_data_phiN(idx), loss_history.phiN(idx), ['  ' num2str(loss_history.phiN(idx), '%.2e')], 'FontSize', 8, 'VerticalAlignment', 'middle');
+for idx = 1:4:length(x_data_phiN)
+    text(x_data_phiN(idx), loss_history.phiN(idx), num2str(loss_history.phiN(idx), '%.2e'), 'FontSize', 8, 'VerticalAlignment', 'bottom', 'HorizontalAlignment', 'center');
 end
 
 % Subplot 3: Regularization Term
@@ -195,10 +229,9 @@ xlabel('Optimization Step');
 ylabel('Loss');
 grid on;
 set(gca, 'YScale', 'log');
-% Add data labels to each point
 x_data_Ru = 1:length(loss_history.Ru);
-for idx = 1:length(x_data_Ru)
-    text(x_data_Ru(idx), loss_history.Ru(idx), ['  ' num2str(loss_history.Ru(idx), '%.2e')], 'FontSize', 8, 'VerticalAlignment', 'middle');
+for idx = 1:4:length(x_data_Ru)
+    text(x_data_Ru(idx), loss_history.Ru(idx), num2str(loss_history.Ru(idx), '%.2e'), 'FontSize', 8, 'VerticalAlignment', 'bottom', 'HorizontalAlignment', 'center');
 end
 
 % Add a main title

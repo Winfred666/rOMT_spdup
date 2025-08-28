@@ -29,13 +29,14 @@ end
 % load ROI
 if cfg.do_ROI_msk
     tmp = nii2mat(cfg.ROI_msk_path,cfg.x_range,cfg.y_range,cfg.z_range);
-    cfg.msk = tmp>1e-4; % WARNING: adjust threshold if necessary
+    cfg.msk = tmp>cfg.ROI_msk_threshold; % WARNING: adjust threshold if necessary
 else
     cfg.msk = ones(length(cfg.x_range),length(cfg.y_range),length(cfg.z_range));
 end
 if cfg.do_resize
    cfg.msk = resizeMatrix(cfg.msk,round(cfg.size_factor.*size(cfg.msk)),'linear');
    cfg.msk(cfg.msk~=1) = 0;
+   cfg.msk_undilate = cfg.msk;
 end
 if cfg.dilate>0
     [xr,yr,zr] = meshgrid(-cfg.dilate:cfg.dilate,-cfg.dilate:cfg.dilate,-cfg.dilate:cfg.dilate);
@@ -75,15 +76,16 @@ parfor i = 1:global_steps
     if cfg.smooth>0
         tmp = affine_diffusion_3d(tmp,cfg.smooth,0.1,1,1);
     end
-    tmp(~cfg.msk) = 0;
+    tmp(~cfg.msk) = 0; % already mask out the density field outside of mask, so that there will be no velocity flow outside of brain !
     vol_tmp{i} = tmp;
 end
 
 
 cfg.sig_str                 = erase(num2str(cfg.sigma,'%.0e'),'-0');
 cfg.true_size               = round(cfg.size_factor*[length(cfg.x_range),length(cfg.y_range),length(cfg.z_range)]);
-cfg.version                 = sprintf('diff_%s_tj_%d_dt_%2.1f_nt_%d_ti_%d_tf_%d_uini_0_beta_%5.4f_R_gamma_%4.3f_dtri%d_rsmooth%d_rreinit%d_source%d_dilate%d_pcg%d',...
-                                cfg.sig_str,cfg.time_jump,cfg.dt,cfg.nt,cfg.first_time,cfg.last_time,cfg.beta,cfg.gamma,cfg.dTri,cfg.smooth,cfg.reinitR,cfg.add_source,cfg.dilate,cfg.niter_pcg);
+niter_string_comma = sprintf('%d,', cfg.niter_pcg);
+cfg.version                 = sprintf('diff_%s_tj_%d_dt_%2.1f_nt_%d_ti_%d_tf_%d_uini_0_beta_%5.4f_R_gamma_%4.3f_dtri%d_rsmooth%d_rreinit%d_source%d_dilate%d_pcg%s',...
+                                cfg.sig_str,cfg.time_jump,cfg.dt,cfg.nt,cfg.first_time,cfg.last_time,cfg.beta,cfg.gamma,cfg.dTri,cfg.smooth,cfg.reinitR,cfg.add_source,cfg.dilate,niter_string_comma(1:end-1));
 cfg.out_dir                 = sprintf('./test_results/%s/%s',cfg.tag,cfg.version);
 
 % broadcast dti_enhanced, there is not staggerred face-centered, only cell-centered
@@ -202,6 +204,18 @@ end
 
 
 %% Visualization of Pe map (full)
+close all;
+figure,
+
+[x1, y1, z1] = meshgrid(1:cfg.true_size(2), 1:cfg.true_size(1), 1:cfg.true_size(3));
+mskfv = isosurface(x1,y1,z1,cfg.msk,0.5);
+mskp = patch(mskfv);
+mskp.FaceColor = [.17,.17,.17];
+mskp.FaceAlpha= 0.01;
+mskp.EdgeColor = [.17,.17,.17];
+mskp.EdgeAlpha= 0;
+mskp.DisplayName = 'mask';
+
 x = 1:cfg.true_size(1);
 y = 1:cfg.true_size(2);
 z = 1:cfg.true_size(3);
@@ -210,7 +224,6 @@ x_slices = round(linspace(1, cfg.true_size(2), cfg.speedmap_slice));
 y_slices = round(linspace(1, cfg.true_size(1), cfg.speedmap_slice));
 z_slices = round(linspace(1, cfg.true_size(3), cfg.speedmap_slice));
 
-figure,
 hs=slice(y,x,z,map.Pe_full,x_slices,y_slices,z_slices); 
 set(hs,'EdgeColor','none','FaceColor','interp','FaceAlpha',0.04);
 custom_alpha = [0, linspace(0.4, 0.6, 99)];
@@ -293,7 +306,17 @@ end
 % Average from total step: 1 + (number of t1 steps) * nt * glacfg.nEulStep
 s = map.s_full; % Speed map at integral part
 
+close all;
 figure,
+
+mskfv = isosurface(x1,y1,z1,cfg.msk,0.5);
+mskp = patch(mskfv);
+mskp.FaceColor = [.17,.17,.17];
+mskp.FaceAlpha= 0.01;
+mskp.EdgeColor = [.17,.17,.17];
+mskp.EdgeAlpha= 0;
+mskp.DisplayName = 'mask';
+
 hs=slice(y,x,z,s,x_slices,y_slices,z_slices); 
 set(hs,'EdgeColor','none','FaceColor','interp','FaceAlpha',0.04);
 alpha('color'),alphamap(linspace(0,1,100))
@@ -337,8 +360,7 @@ close all;
 figure,
 
 magnify = 1;%1;
-[x, y, z] = meshgrid(1:cfg.true_size(2), 1:cfg.true_size(1), 1:cfg.true_size(3));
-mskfv = isosurface(x,y,z,cfg.msk,0.5);
+mskfv = isosurface(x1,y1,z1,cfg.msk,0.5);
 mskp = patch(mskfv);
 mskp.FaceColor = [.17,.17,.17];
 mskp.FaceAlpha= 0.031;
@@ -462,8 +484,7 @@ end
 %
 hold on;
 
-[x, y, z] = meshgrid(1:size(cfg.msk, 2), 1:size(cfg.msk, 1), 1:size(cfg.msk, 3));
-mskfv = isosurface(x,y,z,cfg.msk,0.5);
+mskfv = isosurface(x1,y1,z1,cfg.msk,0.5);
 mskp = patch(mskfv);
 mskp.FaceColor = [.2,.57,.2];
 mskp.FaceAlpha= 0.05;

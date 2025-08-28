@@ -20,8 +20,8 @@ save(sprintf('%s/rho_%s_%d_t_0.mat',cfg.out_dir,cfg.tag,cfg.first_time),'rho_n')
 
 fprintf('\n =============== rOMT Starts ===============\n')
 fprintf('______________________________________________\n\n')
-fprintf(' tag:\t\t%s\n dataset:\t%s\n sigma:\t\t%.4f\n gamma:\t\t%.4f\n beta:\t\t%.4f\n nt:\t\t%d\n dt:\t\t%.2f\n pcg:\t\t%d\n',cfg.tag,cfg.dataset_name, ...
-    cfg.sigma,cfg.gamma,cfg.beta,cfg.nt,cfg.dt,cfg.niter_pcg)
+fprintf(' tag:\t\t%s\n dataset:\t%s\n sigma:\t\t%.4f\n gamma:\t\t%.4f\n beta:\t\t%.4f\n nt:\t\t%d\n dt:\t\t%.2f\n pcg:\t\t%s\n',cfg.tag,cfg.dataset_name, ...
+    cfg.sigma,cfg.gamma,cfg.beta,cfg.nt,cfg.dt, sprintf('%d,', cfg.niter_pcg));
 fprintf(' size:\t\t%s\n do_resize:\t%d\n resize_factor:\t%.2f\n start frame:\t%d\n end frame:\t%d\n frame jump:\t%d\n\n\n',sprintf('%d ', cfg.true_size),cfg.do_resize,cfg.size_factor,cfg.first_time,cfg.last_time+cfg.time_jump,cfg.time_jump)
 %%
 %{
@@ -69,7 +69,9 @@ parfor tind = 1:global_steps
     %true final density
     par = paramInitFunc(cfg);
     par.drhoN     = cfg.vol(tind+1).data(:);
-    
+    mask_single_t = kron(ones(par.dim, 1), cfg.msk(:));
+    mask_full     = repmat(mask_single_t, par.nt, 1);
+    par.mask_full       = mask_full; % we need to mask out gradient to prevent velocity field out side of brain
     %par = paramInitFunc(true_size',nt,dt,sigma,add_source,gamma,beta,niter_pcg,dTri);
     %par.drhoN     = rho_N(:);
     

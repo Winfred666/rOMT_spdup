@@ -1,4 +1,6 @@
-sp_thresh = 45;
+% Copy this code after running GLAD, to quickly getting pathline graph at a higher sp_thresh
+
+sp_thresh = 24;
 
 % --- Post-GLAD Pathline Filtering ---
 fprintf('Performing post-GLAD pathline filtering based on sp_thresh...\n');

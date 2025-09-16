@@ -7,13 +7,14 @@ addpath(genpath('./nii_preprocess'))
 lymph = struct();
 lymph.run_Ns = [3,5,7]; % processing steps to run
 % lymph.src = '/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/data/ours/test1/total_src.txt'; % source image
-dataset = 'KX';
-dataset_num = '078';
+dataset = 'ISO'; % KX
+dataset_num = '52'; % 078
 lymph.src = sprintf('/data/xym/DEX_MRI/%s/%s_%s/src_total.txt', dataset,dataset,dataset_num);
 % dst is only for some log files.
 % lymph.dst = '/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/data/ours/test1/DCE_nii_preprocess_log'; % destination directory
 lymph.dst = sprintf('/data/xym/DEX_MRI/%s/%s_%s/DCE_nii_preprocess_log', dataset, dataset, dataset_num);
-% mask for brain (still the same), used in normalization range.
+% mask for head(bigger) or brain(smaller), used in normalization range + percentage.
+% normaliz / percentage will scale all voxels based on the mask region.
 lymph.msk = sprintf('/data/xym/DEX_MRI/%s/Template_C57Bl6_n30_brain_%s_%s.nii', dataset, dataset, dataset_num);
 
 lymph.print = 'n'; % visualize and print image.

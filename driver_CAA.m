@@ -15,17 +15,6 @@ if ~isfield(cfg, 'exclude_frames')
     cfg.exclude_frames = [];
 end
 
-if isfield(cfg, 'dti_path') && isfield(cfg, 'stagger_dti_path')
-    cfg.D_tensor = load(cfg.dti_path, 'D_tensor').D_tensor;
-    if cfg.do_resize
-        cfg.D_tensor = resizeDTIMatrix(cfg.D_tensor, round(cfg.size_factor.*size(cfg.D_tensor,1:3)),'linear');
-    end
-    % cfg.stagger_D_tensor = load(cfg.stagger_dti_path, 'stagger_D_tensor').stagger_D_tensor;
-    fprintf("Loaded DTI tensor from: %s\n", cfg.dti_path);
-else
-    cfg.D_tensor = []; % to trigger isempty and get isotropic laplace matrix in tryGetAnisotropicDiffusion.m
-end
-
 % load ROI
 if cfg.do_ROI_msk
     tmp = nii2mat(cfg.ROI_msk_path,cfg.x_range,cfg.y_range,cfg.z_range);
@@ -33,15 +22,32 @@ if cfg.do_ROI_msk
 else
     cfg.msk = ones(length(cfg.x_range),length(cfg.y_range),length(cfg.z_range));
 end
+
+% resize mask, dx should magnify accordingly.
 if cfg.do_resize
    cfg.msk = resizeMatrix(cfg.msk,round(cfg.size_factor.*size(cfg.msk)),'linear');
    cfg.msk(cfg.msk~=1) = 0;
    cfg.msk_undilate = cfg.msk;
+   cfg.dx = cfg.dx / cfg.size_factor; % spatial resolution in mm
 end
 if cfg.dilate>0
     [xr,yr,zr] = meshgrid(-cfg.dilate:cfg.dilate,-cfg.dilate:cfg.dilate,-cfg.dilate:cfg.dilate);
     strel = (xr/cfg.dilate).^2 + (yr/cfg.dilate).^2 + (zr/cfg.dilate).^2 <= 1;
     cfg.msk = imdilate(cfg.msk,strel);
+end
+
+% load DTI tensor if provided
+if isfield(cfg, 'dti_path') && isfield(cfg, 'stagger_dti_path')
+    cfg.D_tensor = load(cfg.dti_path, 'D_tensor').D_tensor;
+    if cfg.do_resize
+        cfg.D_tensor = resizeDTIMatrix(cfg.D_tensor, round(cfg.size_factor.*size(cfg.D_tensor,1:3)),'linear');
+        % unit of DTI tensor is mm^2/s, need to convert to grid^2/min according to dt which is 1(min) and dx which is cfg.dx(mm)
+        cfg.D_tensor = cfg.D_tensor * 60 / (cfg.dx^2);
+    end
+    % cfg.stagger_D_tensor = load(cfg.stagger_dti_path, 'stagger_D_tensor').stagger_D_tensor;
+    fprintf("Loaded DTI tensor from: %s\n", cfg.dti_path);
+else
+    cfg.D_tensor = []; % to trigger isempty and get isotropic laplace matrix in tryGetAnisotropicDiffusion.m
 end
 
 
@@ -134,6 +140,11 @@ fprintf('Loading rOMT results from: %s\n', cfg.out_dir);
 
 global_steps = length(cfg.first_time:cfg.time_jump:cfg.last_time);
 u_cell = cell(1, global_steps);
+
+% WARNING: because the velocity is now in mm/min, transfer DTI back to mm/min also.
+if ~isempty(cfg.D_tensor)
+    cfg.D_tensor = cfg.D_tensor * (cfg.dx ^ 2);
+end
 
 parfor tind = 1:global_steps
     ti = cfg.first_time+(tind-1)*cfg.time_jump;

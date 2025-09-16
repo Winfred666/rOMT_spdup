@@ -93,7 +93,11 @@ parfor tind = 1:global_steps
     % fprintf('########    ###########     __________________\n')
     
     dlmwrite(fname,[tind,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,phi,mk,Ru,phiN,max(u(:)),btoc],'-append');
-    % WARNING: here save the velocity field.
+
+    % before saving velocity , turn grid/min back to mm/min
+    u = u * (cfg.dx); % velocity in mm/min
+    
+    % WARNING: here save the velocity field (all our optimization results).
     save_un(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),u);
     
     % WARNING: the rhon field is GT rho, not the advect one.

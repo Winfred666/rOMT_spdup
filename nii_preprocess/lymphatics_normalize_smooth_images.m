@@ -7,7 +7,7 @@ if exist(lymph.dst,'dir')
 end
 
 CMD=['mkdir ',lymph.dst];
-[status,result]=system(CMD);
+[~,~]=system(CMD);
 
 % cd(lymph.dst);
 

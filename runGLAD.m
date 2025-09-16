@@ -199,6 +199,15 @@ for t1 = ti:tj:tf
         save(sprintf('%s/rho_diff_t%d.mat', rho_diff_dir, t1), 'rho_difference');
         % Create and save the visualization
         figure('Visible', 'off'); % Create figure without showing it
+        mskfv = isosurface(x1,y1,z1,cfg.msk,0.5);
+        mskp = patch(mskfv);
+        mskp.FaceColor = [.17,.17,.17];
+        mskp.FaceAlpha= 0.01;
+        mskp.EdgeColor = [.17,.17,.17];
+        mskp.EdgeAlpha= 0;
+        mskp.DisplayName = 'mask';
+        hold on;
+
         x = 1:n(1); y = 1:n(2); z = 1:n(3);
         x_slices = round(linspace(1, n(2), 5));
         y_slices = round(linspace(1, n(1), 5));
@@ -223,7 +232,7 @@ for t1 = ti:tj:tf
     end
     % --- END OF VISUALIZATION ---
     % according to the Fisher's law, the diffuse velocity w is driven by gradient of log(density)
-    % for DTI anisotropic diffusion, still the source force is gradient of log(density), but 
+    % for DTI anisotropic diffusion, still the source force is gradient of log(density), but with diffusion tensor space transform.
     for t2 = 1:nt % integral from 1 to nt along t2.
         TIND = ((t1 - ti)/tj)*nt + t2;
         T = t1+(t2-1)*(tj/nt);
@@ -246,7 +255,7 @@ for t1 = ti:tj:tf
         
         %add eps to d to prevent log(0)
         
-        [w2,w1,w3] = gradient(log(d+2*eps));
+        [w2,w1,w3] = gradient(log(d+2*eps), cfg.dx, cfg.dx, cfg.dx);  % mm spacing
         
         % pack as N x 3 (N = prod(n))
         N  = prod(n);
@@ -515,6 +524,7 @@ for k = 1:length(pl_cur) % averaged map
     end
 end
 
+% dx already multiplied in the gradient calculation
 Pe = s./ds;
 Pe_full = s_full./ds_full;%s_full./(ds_full+eps);
 

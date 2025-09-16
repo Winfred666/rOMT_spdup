@@ -2,7 +2,7 @@ function cfg = set_config_CAA(config_tag)
 % Configuration settings for the CAA dataset
 clear cfg;
 
-cfg.only_post_processing    = 1; % set to 1 if already run ROMT, 
+cfg.only_post_processing    = 0; % set to 1 if already run ROMT, 
 % this could skip ROMT and only do GLAD using serialized u and rho fields.
 cfg.dataset_name            = 'CAA';  % name of dataset (do not change, fix as standard setting)
 
@@ -28,25 +28,30 @@ case 'ours'
             cfg.exclude_frames          = [4, 5, 6];
         case 'ISO'
             cfg.data_template           = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
-            cfg.ROI_msk_path            = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii'; % basic mask to set control volume.
+            cfg.ROI_msk_path            = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_head_ISO_52.nii'; % basic mask to set control volume.
             cfg.exclude_frames          = [4, 5, 6, 7, 8, 30, 31];
             
             % WARNING: A Nx3x3 tensor field, N=XYZ. If DTI path is set, then diffuse term (laplace matrix) will calculate using getAnisotropicDiffusion.m
             % and dti_enhanced will be used, sigma will be ignored.
             cfg.dti_path                = '/data/xym/DTI_data/ISO 052/dicom/out_dwi/dti_aligned/dti_tensor.mat';
+            
+            cfg.sp_mask_opts(1).path    =  '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii'; %'./data/12_MONTH_DATA/12months_mask_brainCSF/C294.nii';
+        
         case 'KX'
             cfg.data_template           = '/data/xym/DEX_MRI/KX/KX_078/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
-            cfg.ROI_msk_path            = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_brain_KX_078.nii'; % basic mask to set control volume.
-            cfg.exclude_frames          = [4, 5, 6, 7, 8, 27, 28, 29, 30, 31]; % set the speeed field of exclude_frames to zero.
+            cfg.ROI_msk_path            = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_head_KX_078.nii'; % basic mask to set control volume.
+            cfg.exclude_frames          = [4, 5, 6, 7, 8, 28, 29, 30, 31]; % set the speeed field of exclude_frames to zero.
 
             cfg.dti_path                = '/data/xym/DTI_data/KX 078/dicom/out_dwi/dti_aligned/dti_tensor.mat';
+
+            cfg.sp_mask_opts(1).path    = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_brain_KX_078.nii';
         otherwise
             error('Unknown dataset postfix: %s', config_tag_postfix);
     end
 
     % basic mask for setting control volume + background anatomy image.
     cfg.do_ROI_msk              = 1;
-    cfg.ROI_msk_threshold       = 0.02; % threshold for mask, if msk = raw_msk>0 cause problem.
+    cfg.ROI_msk_threshold       = 0.05; % threshold for mask, if msk = raw_msk>0 cause problem.
     
     cfg.x_range                 = 1:128;
     cfg.y_range                 = 1:160;
@@ -54,7 +59,7 @@ case 'ours'
 
     % set rOMT parameters
     cfg.do_resize               = 1;%1;
-    cfg.size_factor             = 0.6;%0.5;
+    cfg.size_factor             = 0.65;%0.5;
     %cfg.data_index_E            = 7:30;
     
     cfg.smooth                  = 1.8; % evolution time when doing diffusion process runs.Larger t_tot values result in more smoothing. 
@@ -63,17 +68,18 @@ case 'ours'
     cfg.dilate                  = 0; % dilate monitor zone, more like exploring dirichlet boundary.
     
     % set bigger if you want to use more data, e.g., 7:50 for 44 time points.
-    cfg.first_time              = 9; %9;%cfg.data_index_E(13);，do not include inject time.
+    cfg.first_time              = 7; %9;%cfg.data_index_E(13);，do not include inject time.
     cfg.time_jump               = 1; %3;
-    cfg.last_time               = 26;%cfg.data_index_E(33);%;cfg.data_index_E(31);
+    cfg.last_time               = 28;%cfg.data_index_E(33);%;cfg.data_index_E(31);
     
     % empirically set parameters
-    cfg.dti_enhanced            = 2.0; % when use dti_path, better enhance the tensor field if Mean Diffusivity too small. 
+    cfg.dti_enhanced            = 0.4; % when use dti_path, scale the tensor field according to molecule size (1/3). 
     cfg.sigma                   = 2e-3; % diffusion coefficient, when cfg.dti_path is set, it will become useless
+    
+    cfg.dx                      = 0.125; % spatial resolution in mm, for DCE-MRI seq, it is 0.125mm.
     cfg.dt                      = 1.0; % 0.2;% timestep for every steps among nt*(last_time-first_time)/time_jump ,
     
-    % for DCE-MRI seq, make sure dt * nt = 4 , so that velocity's unit is grid/min
-    % or make sure dt * nt = 4/60/0.125 = 0.5333, so that velocity's unit is mm/s
+    % for DCE-MRI seq, make sure dt * nt = 4 , so that velocity's unit is mm/min
     
     cfg.nt                      = 4; % interpolate velocity field, smaller timestep for easier convergence + memory usage
     
@@ -85,23 +91,22 @@ case 'ours'
     cfg.reinitR                 = 1; % (No parallel version only) if do consecutively and 1 if reinitialize rho
     cfg.reInitializeU           = 1; % (No parallel version only), 1 if reinitialize u to 0 before each time step; 0 if not, unless first time step
 
-    cfg.niter_pcg               = [550, 900]; % rounds for pcg solver, will start from 25 and exponentially grow up if LSB, set higher if Hl=-g hard to converge. together with update steps par.maxUiter;
-    cfg.maxUiter                = 22; % step for update of velocity field, set higher if convergence(see from loss figure) is hard.
+    cfg.niter_pcg               = [700, 900]; % rounds for pcg solver, will start from 25 and exponentially grow up if LSB, set higher if Hl=-g hard to converge. together with update steps par.maxUiter;
+    cfg.maxUiter                = 20; % step for update of velocity field, set higher if convergence(see from loss figure) is hard.
     
     cfg.dTri                    = 1;%1 := 'closed', 3:= 'open' for boundary condition
     cfg.add_source              = 0; % for unbalanced rOMT.
     
     % GLAD2 config
     % filter for GLAD pathline source points area.
-    cfg.density_percent_thres   = 8;  % Threshold to mask velocity, (e.g., 0.1 = 10% bigger than baseline signal)
-    cfg.sp_thresh               = 8;  % MRI intensity higher than sp_thresh percentage will consider as start point.
+    cfg.density_percent_thres   = 16;  % Threshold to mask velocity, (e.g., 0.1 = 10% bigger than baseline signal)
+    cfg.sp_thresh               = 16;  % MRI intensity higher than sp_thresh percentage will consider as start point.
     cfg.GLAD_spfs               = 22;  % starting area sample interval
-    cfg.sl_tol                  = 0.8; %threshold for minimum Euclidean length between initial and final streamline points
+    cfg.sl_tol                  = 1.0; %threshold for minimum Euclidean length between initial and final streamline points
 
     % masks for GLAD pathline source points area.
     %cfg.max_dpsnrv             = './data/12_MONTH_DATA/MAXpsnrv/C294_031318A_psnrv_max.nii'; %
     cfg.sp_mask_opts(1).name    = 'brain_disabled'; % name of the mask, activate it by delete "_disabled". 
-    cfg.sp_mask_opts(1).path    =  cfg.ROI_msk_path; %'./data/12_MONTH_DATA/12months_mask_brainCSF/C294.nii';
     cfg.sp_mask_opts(1).threshold = 0.01; % for tissue probability mask, 0.5 is standard for CFS/W/G area.
     % update step
 
@@ -154,9 +159,9 @@ case 'C294'
     cfg.last_time               = 51;%cfg.data_index_E(33);%;cfg.data_index_E(31);
 
     cfg.sigma                   = 2e-3;
-    cfg.dt                      = 0.4; % time step, only affect accuracy because optimization will adjust velocity according to dt
+    cfg.dt                      = 0.1; % time step, only affect accuracy because optimization will adjust velocity according to dt
 
-    cfg.nt                      = 4;
+    cfg.nt                      = 10;
 
     cfg.gamma                   = 0.008;
     cfg.beta                    = 0.0001;

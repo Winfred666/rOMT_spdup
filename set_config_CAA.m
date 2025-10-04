@@ -1,193 +1,173 @@
-function cfg = set_config_CAA(config_tag)
-% Configuration settings for the CAA dataset
-clear cfg;
+function cfg = set_config_CAA(config_path)
+% set_config_CAA Load configuration for CAA experiments from a JSON file.
+%   cfg = set_config_CAA(config_path)
+%   - config_path: path to a JSON config under ./configs, or a base name
+%                  (e.g., 'ours_ISO' -> './configs/ours_ISO.json').
+%   The function applies sensible defaults, then overrides with user values.
+%   dataset_name is forced to 'CAA'.
 
-cfg.only_post_processing    = 0; % set to 1 if already run ROMT, 
-% this could skip ROMT and only do GLAD using serialized u and rho fields.
-cfg.dataset_name            = 'CAA';  % name of dataset (do not change, fix as standard setting)
+% Initialize defaults
+cfg = struct();
 
-cfg.tag                     = config_tag; % name result folder (could change to any name)
+% Always fixed
+cfg.dataset_name            = 'CAA';
 
-config_tag_prefix = split(config_tag, '_');
-config_tag_postfix = config_tag_prefix{end}; % get the last part of the tag, e.g., 'test1' or 'C294'
-config_tag_prefix = config_tag_prefix{1};
+% Common defaults (can be overridden by JSON)
+% cfg.only_post_processing    = 1;    % set to 1 if already run ROMT
+% cfg.steady_velocity_file_path = '';% optional external steady velocity file
 
-switch config_tag_prefix
+% Basic ROI/mask and volume defaults
+cfg.do_ROI_msk              = 1;
+cfg.ROI_msk_threshold       = 0.05;
+cfg.x_range                 = 1:128;
+cfg.y_range                 = 1:160;
+cfg.z_range                 = 1:128;
 
-case 'ours'
-    % preprocessed matdata, if set, will cover nii data.
-    % cfg.matdata_template        = './data/ours/test1/DCE_mat_data/dce%d.mat'; % template for mat data loading,
-    % cfg.matdata_fieldname       = 'V';
-    switch config_tag_postfix
-        case 'test1'
-            cfg.data_template           = './data/ours/test1/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
-            cfg.ROI_msk_path            = './data/ours/test1/Template_C57Bl6_n30_brain.nii'; % basic mask to set control volume.
-        case 'DEXI' 
-            cfg.data_template           = '/data/xym/DEX_MRI/DEXI/DEXI_083/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
-            cfg.ROI_msk_path            = '/data/xym/DEX_MRI/DEXI/Template_C57Bl6_n30_brain_DEXI_083.nii'; % basic mask to set control volume.
-            cfg.exclude_frames          = [4, 5, 6];
-        case 'ISO'
-            cfg.data_template           = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
-            cfg.ROI_msk_path            = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_head_ISO_52.nii'; % basic mask to set control volume.
-            cfg.exclude_frames          = [4, 5, 6, 7, 8, 30, 31];
-            
-            % WARNING: A Nx3x3 tensor field, N=XYZ. If DTI path is set, then diffuse term (laplace matrix) will calculate using getAnisotropicDiffusion.m
-            % and dti_enhanced will be used, sigma will be ignored.
-            cfg.dti_path                = '/data/xym/DTI_data/ISO 052/dicom/out_dwi/dti_aligned/dti_tensor.mat';
-            
-            cfg.sp_mask_opts(1).path    =  '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii'; %'./data/12_MONTH_DATA/12months_mask_brainCSF/C294.nii';
-        
-        case 'KX'
-            cfg.data_template           = '/data/xym/DEX_MRI/KX/KX_078/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii'; % template for data loading
-            cfg.ROI_msk_path            = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_head_KX_078.nii'; % basic mask to set control volume.
-            cfg.exclude_frames          = [4, 5, 6, 7, 8, 28, 29, 30, 31]; % set the speeed field of exclude_frames to zero.
+% rOMT parameters (defaults similar to previous 'ours' case)
+cfg.do_resize               = 1;
+cfg.size_factor             = 0.6;
 
-            cfg.dti_path                = '/data/xym/DTI_data/KX 078/dicom/out_dwi/dti_aligned/dti_tensor.mat';
+cfg.smooth                  = 1.8;      % diffusion smoothing time (multiple of dt)
+cfg.dilate                  = 0;        % dilation for domain exploration
+cfg.first_time              = 9;
+cfg.time_jump               = 1;
+cfg.last_time               = 26;
 
-            cfg.sp_mask_opts(1).path    = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_brain_KX_078.nii';
-        otherwise
-            error('Unknown dataset postfix: %s', config_tag_postfix);
+cfg.dti_enhanced            = 0.4;      % scale tensor field according to molecule size (1/3)
+cfg.sigma                   = 2e-3;     % isotropic diffusion coefficient if no DTI
+
+cfg.dx                      = 0.125;    % spatial resolution (mm)
+cfg.dt                      = 1.0;      % time step (min)
+cfg.nt                      = 4;        % sub-steps per time interval, 
+% if MRI interval is 4min, make sure nt*dt = 4 for minute resolution 
+
+cfg.gamma                   = 0.008;    % R_3 regularization (spatial smoothness)
+cfg.beta                    = 0.0001;   % R_1 kinetic energy regularization
+cfg.reinitR                 = 1;        % reinitialize rho each interval
+cfg.reInitializeU           = 1;        % reinitialize u each interval
+cfg.niter_pcg               = [550, 900];
+cfg.maxUiter                = 20;
+cfg.dTri                    = 1;        % boundary condition ('closed')
+cfg.add_source              = 0;        % unbalanced rOMT disabled by default
+
+% GLAD defaults
+cfg.density_percent_thres   = 12;       % threshold to mask velocity by density
+cfg.sp_thresh               = 12;       % start-point threshold (percent)
+cfg.GLAD_spfs               = 18;       % sampling interval for start points
+cfg.sl_tol                  = 2.5;      % minimum streamline length tol
+cfg.GLAD_visualize_mask            = struct('name','brain_disabled','path','', 'threshold', 0.01);
+
+cfg.integral_euler_step     = 10;       % Euler steps per dt for pathlines
+cfg.GLAD_timestep_factor    = 1.0;      % extend pathline length factor
+
+% Visualization defaults
+cfg.speedmap_slice          = 12;
+cfg.anato                   = './data/ours/test1/Template_C57Bl6_n30_brain.nii';
+cfg.view_azi_elevation      = [5, 80];
+cfg.strid                   = 1;
+cfg.flip_z                  = 0;
+cfg.vis_font_size           = 16;
+
+% Normalize config_path input: allow bare name -> ./configs/<name>.json
+if ~contains(config_path, filesep)
+    candidate = fullfile('.', 'configs', [config_path, '.json']);
+    if isfile(candidate)
+        config_path = candidate;
     end
+end
 
-    % basic mask for setting control volume + background anatomy image.
-    cfg.do_ROI_msk              = 1;
-    cfg.ROI_msk_threshold       = 0.05; % threshold for mask, if msk = raw_msk>0 cause problem.
-    
-    cfg.x_range                 = 1:128;
-    cfg.y_range                 = 1:160;
-    cfg.z_range                 = 1:128;
+% If a directory was provided, error
+if isfolder(config_path)
+    error('set_config_CAA:InvalidPath', 'config_path must be a JSON file, not a directory: %s', config_path);
+end
 
-    % set rOMT parameters
-    cfg.do_resize               = 1;%1;
-    cfg.size_factor             = 0.65;%0.5;
-    %cfg.data_index_E            = 7:30;
-    
-    cfg.smooth                  = 1.8; % evolution time when doing diffusion process runs.Larger t_tot values result in more smoothing. 
-    % Think of it as the "exposure time" for the blurring effect.
-    
-    cfg.dilate                  = 0; % dilate monitor zone, more like exploring dirichlet boundary.
-    
-    % set bigger if you want to use more data, e.g., 7:50 for 44 time points.
-    cfg.first_time              = 7; %9;%cfg.data_index_E(13);，do not include inject time.
-    cfg.time_jump               = 1; %3;
-    cfg.last_time               = 28;%cfg.data_index_E(33);%;cfg.data_index_E(31);
-    
-    % empirically set parameters
-    cfg.dti_enhanced            = 0.4; % when use dti_path, scale the tensor field according to molecule size (1/3). 
-    cfg.sigma                   = 2e-3; % diffusion coefficient, when cfg.dti_path is set, it will become useless
-    
-    cfg.dx                      = 0.125; % spatial resolution in mm, for DCE-MRI seq, it is 0.125mm.
-    cfg.dt                      = 1.0; % 0.2;% timestep for every steps among nt*(last_time-first_time)/time_jump ,
-    
-    % for DCE-MRI seq, make sure dt * nt = 4 , so that velocity's unit is mm/min
-    
-    cfg.nt                      = 4; % interpolate velocity field, smaller timestep for easier convergence + memory usage
-    
-    % WARING: loss of R_1 and R_3 loss is lot smaller than R_2 (phi_match loss),
-    cfg.gamma                   = 0.008; % rOMT R_3 loss, for spatial smoothness of velocity field.
-    cfg.beta                    = 0.0001; % rOMT R_1 loss, kinetic energy of velocity field, set bigger if not stable.
-    
-    % if do not have frame_number times memory, replace "parfor" in runROMT_par.m with "par", and also cancel this to get smoother result.
-    cfg.reinitR                 = 1; % (No parallel version only) if do consecutively and 1 if reinitialize rho
-    cfg.reInitializeU           = 1; % (No parallel version only), 1 if reinitialize u to 0 before each time step; 0 if not, unless first time step
+% If file extension missing but file not found, try appending .json
+[config_dir, config_name, config_ext] = fileparts(config_path);
+if isempty(config_ext)
+    try_path = fullfile(config_dir, [config_name, '.json']);
+    if isfile(try_path)
+        config_path = try_path;
+    end
+end
 
-    cfg.niter_pcg               = [700, 900]; % rounds for pcg solver, will start from 25 and exponentially grow up if LSB, set higher if Hl=-g hard to converge. together with update steps par.maxUiter;
-    cfg.maxUiter                = 20; % step for update of velocity field, set higher if convergence(see from loss figure) is hard.
-    
-    cfg.dTri                    = 1;%1 := 'closed', 3:= 'open' for boundary condition
-    cfg.add_source              = 0; % for unbalanced rOMT.
-    
-    % GLAD2 config
-    % filter for GLAD pathline source points area.
-    cfg.density_percent_thres   = 16;  % Threshold to mask velocity, (e.g., 0.1 = 10% bigger than baseline signal)
-    cfg.sp_thresh               = 16;  % MRI intensity higher than sp_thresh percentage will consider as start point.
-    cfg.GLAD_spfs               = 22;  % starting area sample interval
-    cfg.sl_tol                  = 1.0; %threshold for minimum Euclidean length between initial and final streamline points
+% Load JSON and override defaults
+if ~isfile(config_path)
+    error('set_config_CAA:ConfigNotFound', 'Config file not found: %s', config_path);
+end
 
-    % masks for GLAD pathline source points area.
-    %cfg.max_dpsnrv             = './data/12_MONTH_DATA/MAXpsnrv/C294_031318A_psnrv_max.nii'; %
-    cfg.sp_mask_opts(1).name    = 'brain_disabled'; % name of the mask, activate it by delete "_disabled". 
-    cfg.sp_mask_opts(1).threshold = 0.01; % for tissue probability mask, 0.5 is standard for CFS/W/G area.
-    % update step
+raw = fileread(config_path);
+user_cfg = jsondecode(raw);
 
-    cfg.integral_euler_step     = 10; % number of Eulerian steps to be taken per dt, higher for accurate.
-    % trick of extend pathline: fake timestep.
-    cfg.GLAD_timestep_factor    = 1; % factor to extend the pathline length, 2.5 means 150% longer pathline.
+% Override default fields with user-provided ones
+uf = fieldnames(user_cfg);
+for i = 1:numel(uf)
+    f = uf{i};
+    cfg.(f) = user_cfg.(f);
+end
 
-    % visualization settings
-    cfg.speedmap_slice          = 12;
-    cfg.anato                   = './data/ours/test1/Template_C57Bl6_n30_brain.nii'; % for vtk viewing, no use.
-    cfg.view_azi_elevation      = [5, 80]; % view angle for visualization
+% Normalize range fields if provided in JSON
+range_fields = {'x_range','y_range','z_range'};
+for k = 1:numel(range_fields)
+    fname = range_fields{k};
+    if isfield(user_cfg, fname)
+        cfg.(fname) = coerce_range(cfg.(fname));
+    end
+end
 
-    cfg.strid                   = 1; % stride for visualization of flux vectors   
-    cfg.flip_z                  = 0; % flip z-axis for visualization
-    
-    cfg.vis_font_size = 16; % Unified font size for all visualization titles and axes
+% Force dataset name
+cfg.dataset_name = 'CAA';
 
+% Required fields validation
+required_fields = {'tag','data_template','ROI_msk_path'};
+for i = 1:numel(required_fields)
+    if ~isfield(cfg, required_fields{i}) || isempty(cfg.(required_fields{i}))
+        error('set_config_CAA:MissingField', 'Required field missing in %s: %s', config_path, required_fields{i});
+    end
+end
 
-case 'C294'
-    % set directories
-    cfg.data_template = './data/12_MONTH_DATA/psnrv/WT/C294/C294_031318A/psnrv_C294_031318A_DOTA37_30ul_E%02d.nii'; 
+% Optional: ensure exclude_frames exists
+if ~isfield(cfg, 'exclude_frames')
+    cfg.exclude_frames = [];
+end
 
-    cfg.do_ROI_msk              = 1;
-    cfg.ROI_msk_path            = './data/12_MONTH_DATA/masksforOMT/WT/C294_MASK.nii';
-    cfg.ROI_msk_threshold       = 0.01; % threshold for mask, if msk = raw_msk>0 cause problem.
-    cfg.x_range                 = 20:80;
-    cfg.y_range                 = 1:106;
-    cfg.z_range                 = 39:85;
+% Print brief confirmation
+fprintf('Loaded CAA config: %s\n', config_path);
 
-    %cfg.max_dpsnrv              = './data/12_MONTH_DATA/MAXpsnrv/C294_031318A_psnrv_max.nii'; %
-    cfg.anato                   = './data/12_MONTH_DATA/psnrv/WT/C294/pbase_snrv_C294_031318A_DOTA37_30ul_E53.nii'; %
-    cfg.sp_mask_opts(1).name    = 'brain';
-    cfg.sp_mask_opts(1).path    = './data/12_MONTH_DATA/12months_mask_brainCSF/C294.nii';
-    cfg.sp_mask_opts(1).threshold = 0; % for tissue probability mask, 0.5 is standard for CFS/W/G area.
-    % set rOMT parameters
-    cfg.do_resize               = 0;%1;
-    cfg.size_factor             = 1;%0.5;
-    %cfg.data_index_E            = 19:53;
-    cfg.smooth                  = 1;
-
-    cfg.reinitR                 = 1;%1;%0; %0 if do consecutively (runROMT.m) ;
-    % and 1 if reinitialize rho using ground truth, and runROMT_par
-
-    cfg.dilate                  = 3;
-
-    cfg.first_time              = 31;%cfg.data_index_E(13);
-
-    cfg.time_jump               = 2;%3;
-
-    cfg.last_time               = 51;%cfg.data_index_E(33);%;cfg.data_index_E(31);
-
-    cfg.sigma                   = 2e-3;
-    cfg.dt                      = 0.1; % time step, only affect accuracy because optimization will adjust velocity according to dt
-
-    cfg.nt                      = 10;
-
-    cfg.gamma                   = 0.008;
-    cfg.beta                    = 0.0001;
-    cfg.reInitializeU           = 1; % (No parallel version only), leverage phi field from last step for better convergence.
-    cfg.niter_pcg               = [20, 50];%20;
-    cfg.maxUiter                = 25; % step for update of velocity field, set higher if convergence is hard.
-
-    cfg.dTri                    = 1;%1 := 'closed', 3:= 'open' for boundary condition
-    cfg.add_source              = 0;
-
-    % GLAD2 config
-    cfg.GLAD_spfs               = 2; % starting area sample interval.
-    cfg.sp_thresh               = 0.2; % higher than sp_thresh percentage will consider as start point.
-    cfg.integral_euler_step     = 10; % number of Eulerian steps to be taken per dt, higher for accurate.
-    cfg.sl_tol                  = 1; %threshold for minimum Euclidean length between initial and final streamline points
-    cfg.GLAD_timestep_factor    = 2.5; % factor to extend the pathline length, 1.5 means 50% longer pathline.
-    cfg.density_percent_thres   = 1.05;  % Threshold to mask velocity, (e.g., 0.1 = 10% of baseline signal)
-
-    % visualization settings
-    cfg.speedmap_slice          = 10;
-    cfg.view_azi_elevation      = [-188.3500   13.7463]; % view angle for visualization
-    cfg.strid                   = 10; % stride for visualization of flux vectors   
-    cfg.flip_z                  = 0;
-
-    cfg.vis_font_size = 16; % Unified font size for all visualization titles and axes
-
+% Helper to coerce various JSON encodings into a MATLAB range vector
+function r = coerce_range(v)
+    if ischar(v) || (isstring(v) && isscalar(v))
+        parts = strsplit(strtrim(string(v)), ':');
+        nums = str2double(parts);
+        if numel(nums) == 2
+            r = nums(1):nums(2);
+        elseif numel(nums) == 3
+            r = nums(1):nums(2):nums(3);
+        else
+            error('Invalid range string: %s', v);
+        end
+    elseif isnumeric(v)
+        v = double(v(:))';
+        if numel(v) == 2
+            r = v(1):v(2);
+        elseif numel(v) == 3
+            r = v(1):v(2):v(3);
+        elseif numel(v) >= 1
+            r = v; % explicit index list
+        else
+            error('Empty numeric range.');
+        end
+    elseif isstruct(v)
+        if ~isfield(v,'start') || ~isfield(v,'stop')
+            error('Range struct must have start and stop fields.');
+        end
+        step = 1;
+        if isfield(v,'step') && ~isempty(v.step), step = v.step; end
+        r = v.start:step:v.stop;
+    else
+        error('Unsupported range type for value: %s', class(v));
+    end
+    r = round(r);
+    r = r(:)'; % row vector
 end
 
 end

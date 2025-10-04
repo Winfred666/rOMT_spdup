@@ -28,13 +28,13 @@ mskSP = msk;
 
 % only display the data within brain mask
 % WARNING: this mask has three level: 0 for outside, 1 for inside view, 3 for brain
-sp_ind = find(strcmp('brain',{cfg.sp_mask_opts(:).name}));
-if isempty(sp_ind)
-    fprintf('No brain mask found in cfg.sp_mask_opts, using the whole mask.\n');
+seed_mask_enable = cfg.GLAD_visualize_mask.enable;
+if ~seed_mask_enable
+    fprintf('No brain mask found in cfg.GLAD_visualize_mask, using the whole mask.\n');
     msk_brain = msk>cfg.ROI_msk_threshold; % use the whole mask
 else
-    mskROI = nii2mat(cfg.sp_mask_opts(sp_ind).path,cfg.x_range,cfg.y_range,cfg.z_range);
-    msk_brain = mskROI>cfg.sp_mask_opts(sp_ind).threshold; % warning: in sp_mask, brain area is bigger than 1, however when now we set it as label mask.
+    msk_brain = nii2mat(cfg.GLAD_visualize_mask.path,cfg.x_range,cfg.y_range,cfg.z_range);
+    msk_brain = msk_brain > cfg.GLAD_visualize_mask.threshold; % warning: in sp_mask, brain area is bigger than 1, however when now we set it as label mask.
     if cfg.do_resize
         msk_brain = resizeMatrix(double(msk_brain),round(cfg.size_factor.*size(msk_brain)),'linear');
         msk_brain(msk_brain~=1) = 0; % make sure it is binary
@@ -47,10 +47,6 @@ if glacfg.do_sp
     for l = 1:length(cfg.vol)
         data_max = max(data_max,cfg.vol(l).data);
     end
-    % do not repeatedly do downsampling.
-    % if cfg.do_resize
-    %    data_max = resizeMatrix(data_max,round(cfg.size_factor.*size(data_max)),'linear');
-    % end
     
     % --- MODIFICATION: Use sp_thresh as an absolute threshold ---
     absolute_threshold = glacfg.sp_thresh;
@@ -88,7 +84,7 @@ end
 %% Lagrangian pathlines
 %variables if nt > 1
 cfg.n = n';
-h1 = 1; h2 = 1; h3 = 1;
+h1 = 1.0; h2 = 1.0; h3 = 1.0;   % not physically correct, but suitable when drawing pathline.
 cfg.h1 = h1.*ones(n(1),1);
 cfg.h2 = h2.*ones(n(2),1);
 cfg.h3 = h3.*ones(n(3),1);
@@ -148,6 +144,7 @@ if glacfg.smoothv && glacfg.Svt>0 % smooth velocity field in time space
 end
 
 %% running pathlines
+% [x1, y1, z1] = meshgrid(1:cfg.true_size(2), 1:cfg.true_size(1), 1:cfg.true_size(3));
 
 for t1 = ti:tj:tf
     U = Uall(:,(t1-ti)/tj*nt+1:(t1-ti)/tj*nt+nt);
@@ -183,56 +180,57 @@ for t1 = ti:tj:tf
     end
 
     % --- VISUALIZATION OF RHO DIFFERENCE ---
-    rho_diff_dir = sprintf('%s/rho_diff', cfg.out_dir);
-    if ~exist(rho_diff_dir, 'dir')
-        mkdir(rho_diff_dir);
-    end
+    % rho_diff_dir = sprintf('%s/rho_diff', cfg.out_dir);
+    % if ~exist(rho_diff_dir, 'dir')
+    %     mkdir(rho_diff_dir);
+    % end
     
-    % Get the ground truth rho for the end of the interval
-    if ground_truth_rho_idx <= length(cfg.vol)
-        ground_truth_rho = cfg.vol(ground_truth_rho_idx).data;
-        % Get the final advected-diffused rho
-        advected_rho = reshape(RHO_t(:, end), n);
-        % Calculate the difference
-        rho_difference = ground_truth_rho - advected_rho;
-        % Save the difference matrix
-        save(sprintf('%s/rho_diff_t%d.mat', rho_diff_dir, t1), 'rho_difference');
-        % Create and save the visualization
-        figure('Visible', 'off'); % Create figure without showing it
-        mskfv = isosurface(x1,y1,z1,cfg.msk,0.5);
-        mskp = patch(mskfv);
-        mskp.FaceColor = [.17,.17,.17];
-        mskp.FaceAlpha= 0.01;
-        mskp.EdgeColor = [.17,.17,.17];
-        mskp.EdgeAlpha= 0;
-        mskp.DisplayName = 'mask';
-        hold on;
+    % % Get the ground truth rho for the end of the interval
+    % if ground_truth_rho_idx <= length(cfg.vol)
+    %     ground_truth_rho = cfg.vol(ground_truth_rho_idx).data;
+    %     % Get the final advected-diffused rho
+    %     advected_rho = reshape(RHO_t(:, end), n);
+    %     % Calculate the difference
+    %     rho_difference = ground_truth_rho - advected_rho;
+    %     % Save the difference matrix
+    %     save(sprintf('%s/rho_diff_t%d.mat', rho_diff_dir, t1), 'rho_difference');
+    %     % Create and save the visualization
+    %     figure('Visible', 'off'); % Create figure without showing it
+    %     mskfv = isosurface(x1,y1,z1,cfg.msk,0.5);
+    %     mskp = patch(mskfv);
+    %     mskp.FaceColor = [.17,.17,.17];
+    %     mskp.FaceAlpha= 0.01;
+    %     mskp.EdgeColor = [.17,.17,.17];
+    %     mskp.EdgeAlpha= 0;
+    %     mskp.DisplayName = 'mask';
+    %     hold on;
 
-        x = 1:n(1); y = 1:n(2); z = 1:n(3);
-        x_slices = round(linspace(1, n(2), 5));
-        y_slices = round(linspace(1, n(1), 5));
-        z_slices = round(linspace(1, n(3), 5));
+    %     x = 1:n(1); y = 1:n(2); z = 1:n(3);
+    %     x_slices = round(linspace(1, n(2), 5));
+    %     y_slices = round(linspace(1, n(1), 5));
+    %     z_slices = round(linspace(1, n(3), 5));
         
-        hs = slice(y, x, z, rho_difference, x_slices, y_slices, z_slices);
-        set(hs, 'EdgeColor', 'none', 'FaceColor', 'interp', 'FaceAlpha', 0.2);
-        title(sprintf('Rho Difference (Ground Truth - Advected) at t=%d', t1));
-        xlabel('x-axis'), ylabel('y-axis'), zlabel('z-axis');
-        axis image, axis tight;
-        colormap(bwr); % Blue-white-red colormap for differences
-        colorbar;
+    %     hs = slice(y, x, z, rho_difference, x_slices, y_slices, z_slices);
+    %     set(hs, 'EdgeColor', 'none', 'FaceColor', 'interp', 'FaceAlpha', 0.2);
+    %     title(sprintf('Rho Difference (Ground Truth - Advected) at t=%d', t1));
+    %     xlabel('x-axis'), ylabel('y-axis'), zlabel('z-axis');
+    %     axis image, axis tight;
+    %     colormap(bwr); % Blue-white-red colormap for differences
+    %     colorbar;
         
-        % Set color limits to be symmetric around zero
-        max_abs_diff = max(abs(rho_difference(:)));
-        if max_abs_diff > 0
-            clim([-max_abs_diff, max_abs_diff]);
-        end
+    %     % Set color limits to be symmetric around zero
+    %     max_abs_diff = max(abs(rho_difference(:)));
+    %     if max_abs_diff > 0
+    %         clim([-max_abs_diff, max_abs_diff]);
+    %     end
 
-        saveas(gcf, sprintf('%s/rho_diff_t%d.png', rho_diff_dir, t1));
-        close(gcf);
-    end
+    %     saveas(gcf, sprintf('%s/rho_diff_t%d.png', rho_diff_dir, t1));
+    %     close(gcf);
+    % end
     % --- END OF VISUALIZATION ---
     % according to the Fisher's law, the diffuse velocity w is driven by gradient of log(density)
     % for DTI anisotropic diffusion, still the source force is gradient of log(density), but with diffusion tensor space transform.
+    
     for t2 = 1:nt % integral from 1 to nt along t2.
         TIND = ((t1 - ti)/tj)*nt + t2;
         T = t1+(t2-1)*(tj/nt);
@@ -255,7 +253,7 @@ for t1 = ti:tj:tf
         
         %add eps to d to prevent log(0)
         
-        [w2,w1,w3] = gradient(log(d+2*eps), cfg.dx, cfg.dx, cfg.dx);  % mm spacing
+        [w2,w1,w3] = gradient(log(d+2*eps));  % mm spacing
         
         % pack as N x 3 (N = prod(n))
         N  = prod(n);
@@ -358,9 +356,11 @@ for t1 = ti:tj:tf
             else
                 switch glacfg.XT
                     case'T'
-                        xt(thrsh_ind,:) = xt(thrsh_ind,:) + glacfg.mdt.*V_interp(thrsh_ind,:);%so keep all current locations in case can take a step later when conc gets there
+                        % Eular integration: move one step here, though legend of velocity is mm/min, when move in grid shaped cfg.true_size or cfg.n,
+                        % still need to use unit of cell/min. 
+                        xt(thrsh_ind,:) = xt(thrsh_ind,:) + glacfg.mdt.*(V_interp(thrsh_ind,:));
                     case 'X'
-                        xt(thrsh_ind,:) = xt(thrsh_ind,:) + glacfg.mdt.*(V_interp(thrsh_ind,:)./spd_interp);%so keep all current locations in case can take a step later when conc gets there
+                        xt(thrsh_ind,:) = xt(thrsh_ind,:) + glacfg.mdt.*((V_interp(thrsh_ind,:)) ./ spd_interp);
                 end
                 %make sure it stays in bounds:
                 xt = max([h1*0.5,h2*0.5,h3*0.5],min(xt,[h1*(n(1)-.5001),h2*(n(2)-.5001),h3*(n(3)-.5001)]));
@@ -368,7 +368,6 @@ for t1 = ti:tj:tf
                 plspd(thrsh_ind,step) = spd_interp(thrsh_ind);
                 plrho(thrsh_ind,step)  = conc_interp(thrsh_ind);
                 pldspd(thrsh_ind,step) = dspd_interp(thrsh_ind);
-                
             end
         end
     end
@@ -423,7 +422,11 @@ pl_cur = cellfun(@(x) x(:,[2,1,3]),SL2,'UniformOutput',false);
 stream.sstream = sstream2;
 stream.rstream = rstream2;
 stream.pestream = pestream2;
-%% s
+
+
+
+
+%% s (compute speed map, Pe)
 
 outdir = sprintf('LPPA_%s_%s/Speed',paper_fig_str,date_str);
 cfg.outdir_s = outdir;
@@ -524,13 +527,16 @@ for k = 1:length(pl_cur) % averaged map
     end
 end
 
-% dx already multiplied in the gradient calculation
-Pe = s./ds;
-Pe_full = s_full./ds_full;%s_full./(ds_full+eps);
 
-% WARNING: s_full is averaged speed map, ds_full is averaged diffusive speed map.
-s_full(s_full>0) = s_full(s_full>0)./scount(scount>0);
-    
+% Average both speed maps over the number of visits per voxel
+nz = scount > 0;
+s_full(nz)  = s_full(nz)  ./ scount(nz);
+ds_full(nz) = ds_full(nz) ./ scount(nz);
+
+Pe      = s ./ (ds + eps);
+Pe_full = zeros(n);
+Pe_full(nz) = s_full(nz) ./ (ds_full(nz) + eps);
+
 if glacfg.do_masked
     s(~msk) = 0;
     s_full(~msk) = 0;
@@ -564,7 +570,50 @@ map.s_full = s_full;
 map.Pe = Pe;
 map.Pe_full = Pe_full;
 
-%% v
+
+
+%% Calculate v-flux for compartment mask list
+
+fprintf("============= \n compute compartment metrics... \n =============\n")
+nMasks = numel(cfg.compartment_mask_list);
+if nMasks == 0
+    warning('No compartment masks provided (cfg.compartment_mask_list empty).');
+    metrics_all = struct([]);
+else
+    % compute first to define fields, then replicate
+    m1 = compute_compartment_metrics(cfg.compartment_mask_list(1), s_full, ds_full, Pe_full, SL, cfg, scount, false);
+    if isfield(cfg.compartment_mask_list(1),'name')
+        m1.mask_name = cfg.compartment_mask_list(1).name;
+    else
+        m1.mask_name = sprintf('mask_%d', 1);
+    end
+    metrics_all = repmat(m1, nMasks, 1);
+
+    for k = 2:nMasks
+        mk = compute_compartment_metrics(cfg.compartment_mask_list(k), s_full, ds_full, Pe_full, SL, cfg, scount, false);
+        if isfield(cfg.compartment_mask_list(k),'name')
+            mk.mask_name = cfg.compartment_mask_list(k).name;
+        else
+            mk.mask_name = sprintf('mask_%d', k);
+        end
+        metrics_all(k) = mk;
+    end
+end
+
+% convert to table and put mask_name first,
+T = struct2table(metrics_all);
+ord = intersect([{'mask_name'} T.Properties.VariableNames], ...
+                T.Properties.VariableNames, 'stable');
+T = T(:, ord);
+
+% write CSV to cfg.out_dir
+csv_path = fullfile(cfg.out_dir, sprintf('%s_compartment_metrics_E%02d_%02d_%s_%s.csv', ...
+    cfg.tag, ti, tf+tj, paper_fig_str, date_str));
+writetable(T, csv_path);
+fprintf('Compartment metrics written to: %s\n', csv_path);
+fprintf("compute compartment metrics... done \n\n")
+
+%% v (compute flux vector, net displacement of each particle)
 
 outversion = sprintf('%s_%s',paper_fig_str,date_str);
 
@@ -588,6 +637,9 @@ fprintf('Total original %d pathlines\n',length(SL2));
 %convert from cell-centered grid to matlab grid:
 SL = cellfun(@(x) [x(:,1)./h1+0.5,x(:,2)./h2+0.5,x(:,3)./h3+0.5],SL2,'UniformOutput',false); 
 clear SL2;
+
+
+
 
 % disp stores these displacement vectors.
 % dispnor stores the normalized displacement vectors (direction only).
@@ -628,8 +680,14 @@ vtkwrite(sprintf('%s/%s/%s_disp_lentol_%.2f_%s.vtk',cfg.out_dir,outdir,tag,glacf
 if isfield(cfg,'anato')
 vtkwrite(sprintf('%s/%s/%s_anato_%s.vtk',cfg.out_dir,outdir,tag,outversion), 'structured_points', 'mask', anato);
 end
-%% NCA
-%{
+%% NCA (Neighborhood coherence analycsis),
+% Find "good advective vectors" from seed and dilate, which 1. have enough neighbor(not island) > NNnum_tol
+% 2. local region(mask) has consistent flowing direction, this region's standard deviation < stdcut 
+% 3. have enough pathline passing through same trace: number of pathline > Npcut
+% 4. aligned with longer neighbor pathlines cos(theta) > meancut(1)
+% 5. and the displacement vector are sufficiently long (Avepathlen > Avepathlcut).
+% split these advective flux vectors out, others are diffusive flux vectors
+
 [xx, yy, zz] = meshgrid(1:n(2),1:n(1),1:n(3));
 
 startpind = sub2ind(n,round(PATH.startp(:,1)),round(PATH.startp(:,2)),round(PATH.startp(:,3)));
@@ -659,10 +717,13 @@ for sp = 1:length(PATH.displen)
 
 end
 
-%%
+%% NCA - filter
+
 INDD = find(NNnum > glacfg.NNnum_tol & STD<glacfg.stdcut & Np>glacfg.Npcut & WMean>=glacfg.meancut(1) & Avepathlen>glacfg.Avepathlcut);
 INDD2 = find(NNnum > glacfg.NNnum_tol);
-%% further choose potential adv vectors
+
+%% NCA - further choose potential adv vectors
+
 maskadv = zeros(n);
 maskadv(sub2ind(n,round(PATH.startp(INDD,1)),round(PATH.startp(INDD,2)),round(PATH.startp(INDD,3))))=1;
 
@@ -675,8 +736,7 @@ indp = find(maskadvdia(sub2ind(n,PATH.startp(:,1),round(PATH.startp(:,2)),round(
     & maskadv(sub2ind(n,PATH.startp(:,1),round(PATH.startp(:,2)),round(PATH.startp(:,3))))==0);
 indpADV = find(maskadv(sub2ind(n,PATH.startp(:,1),round(PATH.startp(:,2)),round(PATH.startp(:,3))))==1);
 
-% set parameters
-%%
+%% NCA - set parameters
 Mean2 = -1*ones(length(PATH.displen),1); % mean in the neighbor
 WMean2 = Mean2; % weighted mean in the neighbor
 STD2 = Mean2; % L_2^2 distance to 1
@@ -706,7 +766,7 @@ for sp = 1:length(PATH.displen)
     pathl2(sp) = PATH.LengthInPath(sp);
 end
 
-%%
+%% NCA - save ADVind and DIFFind
 INDD_dia = find(NNnum2>glacfg.NNnum_tol2 & STD2<glacfg.stdcut2 & Np2>glacfg.Npcut2 & WMean2>=glacfg.meancut2(1) & Avepathlen2>glacfg.Avepathlcut2 | pathl2>glacfg.pathlcut2);
 fprintf('After further dilate to add more ADV, %d vectors are added among %d candidates to %d already ADV vectors\n',length(INDD_dia),length(indp),length(INDD))
 
@@ -726,8 +786,7 @@ vtkwrite(sprintf('%s/%s/%s_DIFFdisp_%s.vtk',cfg.out_dir,outdir,tag,outversion), 
     'vectors', 'vector_field', PATH.disp(InDdiff,1), PATH.disp(InDdiff,2), PATH.disp(InDdiff,3));
 
 fprintf('Flux vectors in vtk format saved in %s/%s\n\n',cfg.out_dir,outdir)
-%}
-%%
+
 T = toc;
 fprintf('\n Post Processing --- Elapsed Time: %s\n',datestr(seconds(T),'HH:MM:SS'))
 end

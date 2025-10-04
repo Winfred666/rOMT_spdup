@@ -1,0 +1,46 @@
+{
+  "tag": "PINN_ISO52_noDTI",
+  "only_post_processing": true,
+  "steady_velocity_file_path": "/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/test_results/ad_net_velocity_noDTI.mat",
+  "data_template": "/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii",
+  "ROI_msk_path": "/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_head_ISO_52.nii",
+  
+  "x_range": [
+    1,
+    128
+  ],
+  "y_range": [
+    1,
+    160
+  ],
+  "z_range": [
+    1,
+    128
+  ],
+  "do_resize": true,
+  "size_factor": 0.6,
+  "first_time": 9,
+  "time_jump": 1,
+  "last_time": 26,
+  "smooth": 1.8,
+
+
+  "density_percent_thres": 12,
+  "sp_thresh": 12,
+  "GLAD_spfs": 12,
+  "sl_tol": 2.5,
+  
+  "GLAD_timestep_factor": 2.5,
+  "GLAD_visualize_mask": {
+    "enable": false,
+    "path": "/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii",
+    "threshold": 0.01
+  },
+  "compartment_mask_list": [
+    {
+      "name": "whole_brain",
+      "path": "/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii",
+      "threshold": 0.01
+    }
+  ]
+}

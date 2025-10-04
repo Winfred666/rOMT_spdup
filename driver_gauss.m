@@ -13,8 +13,8 @@ cfg.dataset_name            = 'Gaussian';  % name of dataset
 
 % optional
 %cfg.anato                   = './data/12_MONTH_DATA/psnrv/WT/C294/pbase_snrv_C294_031318A_DOTA37_30ul_E53.nii'; %
-%cfg.sp_mask_opts(1).name    = 'brain';
-%cfg.sp_mask_opts(1).path    = '../../data/12_MONTH_DATA/12months_mask_brainCSF/C294.nii';
+%cfg.GLAD_visualize_mask.name    = 'brain';
+%cfg.GLAD_visualize_mask.path    = '../../data/12_MONTH_DATA/12months_mask_brainCSF/C294.nii';
 cfg.do_ROI_msk              = 0;
 
 % set rOMT parameters

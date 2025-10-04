@@ -1,0 +1,25 @@
+{
+  "tag": "ours_DEXI",
+
+  "only_post_processing": true,
+
+  "data_template": "/data/xym/DEX_MRI/DEXI/DEXI_083/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii",
+  "ROI_msk_path": "/data/xym/DEX_MRI/DEXI/Template_C57Bl6_n30_brain_DEXI_083.nii",
+  "exclude_frames": [4, 5, 6],
+  
+  "do_resize": true,
+  "size_factor": 0.6,
+  
+  "x_range": [1, 128],
+  "y_range": [1, 160],
+  "z_range": [1, 128],
+  
+
+  "GLAD_visualize_mask":{
+      "enable": false,
+      "path": "",
+      "threshold": 0.01
+    },
+
+  "compartment_mask_list":[]
+}

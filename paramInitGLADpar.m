@@ -49,25 +49,28 @@ glacfg.vfs = 1;
 
 %% NCA parameters
 
-glacfg.radius = 2; % redius to dialate
-glacfg.NNnum_tol = 20; 
+glacfg.radius = 3; % redius to dilate advective seed and detect neighbor
+glacfg.NNnum_tol = 4; 
 glacfg.stdcut = 0.5; 
-glacfg.meancut = [0.5,1]; 
+glacfg.meancut = [0.6,1]; 
 glacfg.Npcut = 1; 
-glacfg.Avepathlcut = 8; 
+glacfg.Avepathlcut = cfg.sl_tol; 
 glacfg.threshstr = sprintf('NNnum_tol_%d_||_stdcut_%.2f_wmeancut_[%.2f,%.2f]_Npcut_%d_Avepathlcut_%.1f',glacfg.NNnum_tol,glacfg.stdcut,glacfg.meancut(1),glacfg.meancut(2),glacfg.Npcut,glacfg.Avepathlcut);
-
 glacfg.maskdilate = 3;
-glacfg.radius2 = 3; % redius to dialate
+
+
+glacfg.radius2 = 3; % redius to dilate advective seed
+
 glacfg.NNnum_tol2 = 10; 
 glacfg.stdcut2 = 0.4; 
 glacfg.meancut2 = [0.6,1]; 
 glacfg.Npcut2 = 1; 
+
 glacfg.Avepathlcut2 = 10; 
 glacfg.AveMaxpathscut2 = 0.02; 
 glacfg.pathlcut2 = 20;%10;%20;
-glacfg.threshstr2 = sprintf('NNnum_tol_%d_||_stdcut_%.2f_wmeancut_[%.2f,%.2f]_Npcut_%d_Avepathlcut_%.1f|pathlcut_%.1f',glacfg.NNnum_tol2,glacfg.stdcut2,glacfg.meancut2(1),glacfg.meancut2(2),glacfg.Npcut2,glacfg.Avepathlcut2,glacfg.pathlcut2);
 
+glacfg.threshstr2 = sprintf('NNnum_tol_%d_||_stdcut_%.2f_wmeancut_[%.2f,%.2f]_Npcut_%d_Avepathlcut_%.1f|pathlcut_%.1f',glacfg.NNnum_tol2,glacfg.stdcut2,glacfg.meancut2(1),glacfg.meancut2(2),glacfg.Npcut2,glacfg.Avepathlcut2,glacfg.pathlcut2);
 
 % vis parameters
 glacfg.jp = 5;  

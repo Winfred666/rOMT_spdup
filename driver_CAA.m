@@ -5,11 +5,11 @@ addpath('./Inverse','./Sensitivities','./analyzeFlows',genpath('./utilities'))
 
 %% set directories and parameters
 
-if ~exist('config_tag', 'var')
-    config_tag = 'ours_test1'; % default label, could be changed to "C294" for C294 dataset.
+if ~exist('config_path', 'var')
+    config_path = 'ours_ISO'; % default label, could be changed to "C294" for C294 dataset.
 end
 
-cfg = set_config_CAA(config_tag); % Load configuration from function
+cfg = set_config_CAA(config_path); % Load configuration from function
 
 if ~isfield(cfg, 'exclude_frames')
     cfg.exclude_frames = [];
@@ -29,6 +29,8 @@ if cfg.do_resize
    cfg.msk(cfg.msk~=1) = 0;
    cfg.msk_undilate = cfg.msk;
    cfg.dx = cfg.dx / cfg.size_factor; % spatial resolution in mm
+else
+    cfg.size_factor = 1.0;
 end
 if cfg.dilate>0
     [xr,yr,zr] = meshgrid(-cfg.dilate:cfg.dilate,-cfg.dilate:cfg.dilate,-cfg.dilate:cfg.dilate);
@@ -90,8 +92,9 @@ end
 cfg.sig_str                 = erase(num2str(cfg.sigma,'%.0e'),'-0');
 cfg.true_size               = round(cfg.size_factor*[length(cfg.x_range),length(cfg.y_range),length(cfg.z_range)]);
 niter_string_comma = sprintf('%d,', cfg.niter_pcg);
-cfg.version                 = sprintf('diff_%s_tj_%d_dt_%2.1f_nt_%d_ti_%d_tf_%d_uini_0_beta_%5.4f_R_gamma_%4.3f_dtri%d_rsmooth%d_rreinit%d_source%d_dilate%d_pcg%s',...
-                                cfg.sig_str,cfg.time_jump,cfg.dt,cfg.nt,cfg.first_time,cfg.last_time,cfg.beta,cfg.gamma,cfg.dTri,cfg.smooth,cfg.reinitR,cfg.add_source,cfg.dilate,niter_string_comma(1:end-1));
+
+cfg.version                 = sprintf('diff_%3.2f_%s_tj_%d_dt_%2.1f_nt_%d_ti_%d_tf_%d_uini_0_beta_%5.4f_R_gamma_%4.3f_dtri%d_rsmooth%d_rreinit%d_source%d_dilate%d_pcg%s',...
+                               cfg.size_factor,cfg.sig_str,cfg.time_jump,cfg.dt,cfg.nt,cfg.first_time,cfg.last_time,cfg.beta,cfg.gamma,cfg.dTri,cfg.smooth,cfg.reinitR,cfg.add_source,cfg.dilate,niter_string_comma(1:end-1));
 cfg.out_dir                 = sprintf('./test_results/%s/%s',cfg.tag,cfg.version);
 
 % broadcast dti_enhanced, there is not staggerred face-centered, only cell-centered
@@ -135,21 +138,26 @@ if ~cfg.only_post_processing
     end
 end
 
-%% Try to load rOMT velocity results
-fprintf('Loading rOMT results from: %s\n', cfg.out_dir);
+%% Try to load rOMT velocity from results or external outcomes.
+
+if isfield(cfg, 'steady_velocity_file_path')
+    fprintf('Loading external steady velocity from %s\n', cfg.steady_velocity_file_path)
+else
+    fprintf('Loading rOMT results from: %s\n', cfg.out_dir);
+end
 
 global_steps = length(cfg.first_time:cfg.time_jump:cfg.last_time);
 u_cell = cell(1, global_steps);
 
-% WARNING: because the velocity is now in mm/min, transfer DTI back to mm/min also.
-if ~isempty(cfg.D_tensor)
-    cfg.D_tensor = cfg.D_tensor * (cfg.dx ^ 2);
-end
 
 parfor tind = 1:global_steps
     ti = cfg.first_time+(tind-1)*cfg.time_jump;
     tf = cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump;
-    ufile = sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,ti,tf,tind);
+    if isfield(cfg, 'steady_velocity_file_path')
+        ufile = cfg.steady_velocity_file_path
+    else
+        ufile = sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,ti,tf,tind);
+    end
 
     if exist(ufile, 'file')
         fprintf('Loading %s\n', ufile);
@@ -180,7 +188,7 @@ cfg.u = u_cell;
 
 [cfg, map, SL, stream, PATH] = runGLAD(cfg);
 
-% [cfg, s, SL, PATH] = runGLAD2(cfg); % just faster analysis, without pecklet number.
+% [cfg, s, SL, PATH] = runGLAD2(cfg); % used in original repos, just faster analysis without pecklet number.
 
 % --- WARNING: could do Post-GLAD Pathline Filtering later ---
 old_ind_brain = PATH.ind_brain; % Store old indices for reference
@@ -439,7 +447,6 @@ set(gcf,'unit','normalized','position',[0.1, 0.1, 0.6, 0.7],'Color',[0.85,0.85,0
 
 saveas(gcf, sprintf('%s/%s/%s_LagFluxVector_E%02d_%02d.png',cfg.out_dir,cfg.outdir_v,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
 
-%{
 %% Visualization of advective & diffusive vectors
 [InDadv,~,~] = intersect(PATH.ADVind,PATH.ind_brain);
 [InDdiff,~,~] = intersect(PATH.DIFFind,PATH.ind_brain);
@@ -472,8 +479,6 @@ legend('Location','best','Fontsize',12);
 set(gca,'Color',[0.85,0.85,0.93]), set(gcf,'unit','normalized','position',[0.1,1,0.4,0.5],'Color',[0.85,0.85,0.93]), set(gcf, 'InvertHardcopy', 'off')
 
 saveas(gcf, sprintf('%s/%s/%s_LagAdvDiffVector_E%02d_%02d.png',cfg.out_dir,cfg.outdir_v,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
-%}
-
 
 
 fprintf("Flux vector visualization saved.\n");

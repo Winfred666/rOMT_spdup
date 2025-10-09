@@ -6,12 +6,14 @@
 脚本位于 `lymphatics_batch.m`，使用 spm_batch 做处理，必要步骤为 
 3：remove head motion， 
 5：normalize and smooth each frame
-7: get percentage on baseline；这些都已经设置好。
+7: get percentage on baseline；
 
 ### 1.1 准备 DCE-MRI 数据文件夹
 
-
+保存好 baseline，src，里面只有 `.nii.gz` 后缀文件合法
 ```matlab
+lymph.bas_loc_dir = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_baseline';
+lymph.src_loc_dir = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data';
 
 ```
 
@@ -21,8 +23,8 @@
 
 用 C57Bl6 ，通过 3D Slicer General Register + Resample ，在文件中设置：
 
-```
-
+```matlab
+lymph.msk = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii';
 ```
 
 ### 1.3 运行 lymphatics_batch.m

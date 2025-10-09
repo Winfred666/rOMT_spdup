@@ -26,9 +26,10 @@ function file_list = get_files_from_dir(dir_path)
     if ~exist(dir_path, 'dir')
         error('Directory does not exist: %s', dir_path);
     end
-    % delete all the file in folder except .nii.gz file
+    % delete all the file in folder (do not try for .. and .) except .nii.gz file
     delete_files = dir(fullfile(dir_path, '*'));
     delete_files = delete_files(~contains({delete_files.name}, '.nii.gz'));
+    delete_files = delete_files(~ismember({delete_files.name}, {'.', '..'}));
     for i = 1:length(delete_files)
         delete(fullfile(dir_path, delete_files(i).name));
     end

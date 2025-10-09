@@ -62,7 +62,6 @@ cfg.GLAD_timestep_factor    = 1.0;      % extend pathline length factor
 
 % Visualization defaults
 cfg.speedmap_slice          = 12;
-cfg.anato                   = './data/ours/test1/Template_C57Bl6_n30_brain.nii';
 cfg.view_azi_elevation      = [5, 80];
 cfg.strid                   = 1;
 cfg.flip_z                  = 0;
@@ -117,6 +116,7 @@ end
 
 % Force dataset name
 cfg.dataset_name = 'CAA';
+cfg.anato                   = cfg.ROI_msk_path;
 
 % Required fields validation
 required_fields = {'data_template','ROI_msk_path'};

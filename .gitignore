@@ -1,4 +1,4 @@
 data/
 test_results/
-
+temp_output/
 *.log

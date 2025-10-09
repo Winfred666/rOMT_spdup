@@ -11,7 +11,7 @@ lymph.bas_loc_dir = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_baseline';
 lymph.src_loc_dir = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data';
 
 % dst is only for some log files, WARNING: should select an empty folder!
-lymph.dst = '/data/xym/DEX_MRI/ISO/ISO_69/';
+lymph.dst = './temp_output';
 % mask for head(bigger) or brain(smaller), used in normalization range + percentage.
 % normaliz / percentage will scale all voxels based on the mask region.
 lymph.msk = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii';

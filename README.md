@@ -186,7 +186,6 @@ dti_enhanced    % 对 DTI 信号的增强倍数，若可视化DTI 时，网格�
 基础参数：
 
 ```matlab
-tag             % 与 json 文件名一致即可，输出结果会保存到 test_results/tag 文件夹中
 data_template   % 之前预处理得到的 psnr_ 序列
 ROI_msk_path    % 全脑分析中，使用之前预处理使用的 Template.nii 即可
 

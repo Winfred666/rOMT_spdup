@@ -75,6 +75,7 @@ if ~contains(config_path, filesep)
         config_path = candidate;
     end
 end
+[~, cfg.tag, ~] = fileparts(config_path);
 
 % If a directory was provided, error
 if isfolder(config_path)
@@ -118,7 +119,7 @@ end
 cfg.dataset_name = 'CAA';
 
 % Required fields validation
-required_fields = {'tag','data_template','ROI_msk_path'};
+required_fields = {'data_template','ROI_msk_path'};
 for i = 1:numel(required_fields)
     if ~isfield(cfg, required_fields{i}) || isempty(cfg.(required_fields{i}))
         error('set_config_CAA:MissingField', 'Required field missing in %s: %s', config_path, required_fields{i});

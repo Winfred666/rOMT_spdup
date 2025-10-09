@@ -1,6 +1,4 @@
 {
-  "tag": "ours_DEXI",
-
   "only_post_processing": true,
 
   "data_template": "/data/xym/DEX_MRI/DEXI/DEXI_083/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii",

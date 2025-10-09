@@ -1,5 +1,4 @@
 {
-  "tag": "ours_KX78_0.65",
   "only_post_processing": false,
   "data_template": "/data/xym/DEX_MRI/KX/KX_078/DCE_nii_data/psnrT1_FLASH_3D_%04d.nii",
   "ROI_msk_path": "/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_head_KX_078.nii",

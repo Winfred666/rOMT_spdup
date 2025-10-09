@@ -141,7 +141,15 @@ end
 %% Try to load rOMT velocity from results or external outcomes.
 
 if isfield(cfg, 'steady_velocity_file_path')
-    fprintf('Loading external steady velocity from %s\n', cfg.steady_velocity_file_path)
+    fprintf('Loading external steady velocity + optimized coefficient D from %s\n', cfg.steady_velocity_file_path)
+    D_info = load(cfg.steady_velocity_file_path);
+    if(D_info.use_DTI)
+        cfg.dti_enhanced = D_info.D;
+        fprintf('Loading dti_enhanced coeficient: %f\n', D_info.D);
+    else
+        cfg.sigma = D_info.D;
+        fprintf('Loading isotropic constant diffusivity: %f\n', D_info.D);
+    end
 else
     fprintf('Loading rOMT results from: %s\n', cfg.out_dir);
 end

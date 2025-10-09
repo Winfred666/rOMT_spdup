@@ -8,16 +8,10 @@
 5：normalize and smooth each frame
 7: get percentage on baseline；这些都已经设置好。
 
-### 1.1 准备 src_total.txt
+### 1.1 准备 DCE-MRI 数据文件夹
 
-在 `src_total.txt` 逐行列出所有需要处理的 `.nii` 或 `.nii.gz` 文件 ，最好为绝对路径，包括 baseline 和之后的数据帧，如；
 
-```
-/data/xym/DEX_MRI/DEXI/DEXI_084/DCE_nii_data/T1_FLASH_3D_baseline_0000.nii
-/data/xym/DEX_MRI/DEXI/DEXI_084/DCE_nii_data/T1_FLASH_3D_baseline_0001.nii
-/data/xym/DEX_MRI/DEXI/DEXI_084/DCE_nii_data/T1_FLASH_3D_0003.nii
-
-...
+```matlab
 
 ```
 
@@ -25,13 +19,9 @@
 
 空间对齐，并且 nii 头文件变换矩阵也对齐（否则报错）的全脑掩膜，此处预处理是用于 确定 normalize 的平均值取值范围；之后 ROMT 也要用该掩膜。
 
-用 C57Bl6 ，通过 3D Slicer General Register + Resample ，与数据简单对齐的掩膜存放在：
+用 C57Bl6 ，通过 3D Slicer General Register + Resample ，在文件中设置：
 
 ```
-/data/xym/DEX_MRI/DEXI/Template_C57Bl6_n30_brain_DEXI_083.nii
-/data/xym/DEX_MRI/DEXI/Template_C57Bl6_n30_brain_DEXI_084.nii
-
-...
 
 ```
 

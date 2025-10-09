@@ -2,7 +2,7 @@ function lymphatics_realign_image(lymph)
 
 % old_dir = pwd;
 
-spm_batch_src_dir='/home/xym/Desktop/MRI_ROMT/rOMT_spdup-main/data/ours/config';
+spm_batch_src_dir='./configs';
 spm_batch_fname='realign_batch_config.mat';
 
 S = load([spm_batch_src_dir,'/',spm_batch_fname], 'matlabbatch');

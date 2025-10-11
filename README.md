@@ -14,7 +14,6 @@
 ```matlab
 lymph.bas_loc_dir = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_baseline';
 lymph.src_loc_dir = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data';
-
 ```
 
 ### 1.2 准备 Template.nii
@@ -29,7 +28,12 @@ lymph.msk = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii';
 
 ### 1.3 运行 lymphatics_batch.m
 
-所有参数调整都在 `lymphatics_batch.m` 文件中；需调整 `lymph.src` , `dataset`, `dataset_num`, `lymph.src` 以与之前的数据路径匹配。
+所有参数调整都在 `lymphatics_batch.m` 文件中；可调整的参数有：
+
+```matlab
+lymph.force_mass_conservation   % 是否强制质量守恒，每一帧
+lymph.smooth = 0.125 * 2;       % 三维平滑滤波 掩膜/核 的大小，为体素单位 * 核的体素宽度
+```
 
 之后运行：
 

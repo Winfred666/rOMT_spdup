@@ -7,17 +7,18 @@ addpath(genpath('./nii_preprocess'))
 lymph = struct();
 lymph.run_Ns = [3,5,7]; % processing steps to run
 % Define directories for baseline and source files
-lymph.bas_loc_dir = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_baseline';
-lymph.src_loc_dir = '/data/xym/DEX_MRI/ISO/ISO_52/DCE_nii_data';
+lymph.bas_loc_dir = '/data/xym/DEX_MRI/KX/KX_078/DCE_nii_baseline';
+lymph.src_loc_dir = '/data/xym/DEX_MRI/KX/KX_078/DCE_nii_data';
+% mask for head(bigger) or brain(smaller), used in normalization range + percentage.
+% normaliz / percentage will scale all voxels based on the mask region.
+lymph.msk = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_brain_KX_078.nii';
+
+lymph.force_mass_conservation = false; % if force_mass_conservation, for all timestep mass will scale up to peak level
+lymph.smooth = 0.125 * 2; % smoothing kernel size in mm unit, 2-3 times the voxel size is recommended
 
 % dst is only for some log files, WARNING: should select an empty folder!
 lymph.dst = './temp_output';
-% mask for head(bigger) or brain(smaller), used in normalization range + percentage.
-% normaliz / percentage will scale all voxels based on the mask region.
-lymph.msk = '/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii';
-
 lymph.print = 'n'; % visualize and print image.
-lymph.smooth = 0.125 * 2; % smoothing kernel size in mm unit, 2-3 times the voxel size is recommended
 lymph.SL = 1; % slice number if want to print image after normalize + smooth
 
 

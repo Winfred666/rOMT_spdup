@@ -70,8 +70,11 @@ for FN=1:size(lymph.src_loc,1)
     
     % Calculate the correction factor to match the target mass
     % Add a small epsilon to avoid division by zero if current_mass is 0
-    correction_factor = target_mass / (current_mass + eps);
-    
+    if lymph.force_mass_conservation
+        correction_factor = target_mass / (current_mass + eps);
+    else
+        correction_factor = 1.0;
+    end
     % Apply the correction
     corrected_img = img_rel_change * correction_factor;
     

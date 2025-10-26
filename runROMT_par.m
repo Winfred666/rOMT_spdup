@@ -2,6 +2,16 @@ function [cfg,flag] = runROMT_par(cfg)
 
 % reInitializeU = 1; %1 if reinitialize u to 0 before each time step; 0 if not, unless first time step
 
+% if has parpool, not allocate again
+
+num_iter = (cfg.last_time-cfg.first_time)/cfg.time_jump+2;
+if ~isempty(gcp('nocreate'))
+    num_iter = gcp().NumWorkers; % Get the number of workers in the current parallel pool (in case execute later)
+else
+    parpool(num_iter); % Or parpool(12), etc.
+end
+
+
 if ~exist(cfg.out_dir,'dir')
     mkdir(cfg.out_dir)
 end

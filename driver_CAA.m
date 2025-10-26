@@ -59,16 +59,7 @@ end
 global_steps = (cfg.last_time-cfg.first_time)/cfg.time_jump+2;
 vol_tmp = cell(global_steps, 1);
 
-num_iter = global_steps;
-
-% if has parpool, not allocate again
-if ~isempty(gcp('nocreate'))
-    num_iter = gcp().NumWorkers; % Get the number of workers in the current parallel pool
-else
-    parpool(num_iter); % Or parpool(12), etc.
-end
-
-parfor i = 1:global_steps
+for i = 1:global_steps
     cur_frame = cfg.first_time+(i-1)*cfg.time_jump;
     fprintf('Loading frame %d', cur_frame);
     % WARNING: change from 02d to 04d if for different dataloader.
@@ -158,7 +149,7 @@ global_steps = length(cfg.first_time:cfg.time_jump:cfg.last_time);
 u_cell = cell(1, global_steps);
 
 
-parfor tind = 1:global_steps
+for tind = 1:global_steps
     ti = cfg.first_time+(tind-1)*cfg.time_jump;
     tf = cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump;
     if isfield(cfg, 'steady_velocity_file_path')

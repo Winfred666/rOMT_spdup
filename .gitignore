@@ -2,3 +2,4 @@ data/
 test_results/
 temp_output/
 *.log
+matlab_workspace.mat

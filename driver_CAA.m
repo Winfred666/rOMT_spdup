@@ -152,8 +152,19 @@ u_cell = cell(1, global_steps);
 for tind = 1:global_steps
     ti = cfg.first_time+(tind-1)*cfg.time_jump;
     tf = cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump;
-    if isfield(cfg, 'steady_velocity_file_path')
-        ufile = cfg.steady_velocity_file_path
+    if isfield(cfg, 'velocity_dir')
+        fprintf("Loading from velocity dir!!!")
+        if ti >= 7 && tf <= 12
+            ufile = fullfile(cfg.velocity_dir, 'predict_velocity_7_12.mat');
+        elseif ti >= 12 && tf <= 18
+            ufile = fullfile(cfg.velocity_dir, 'predict_velocity_12_18.mat');
+        elseif ti >= 18
+            ufile = fullfile(cfg.velocity_dir, 'predict_velocity_18_27.mat');
+        else
+            error('No matching velocity file for current time range [%g, %g]', ti, tf);
+        end
+    elseif isfield(cfg, 'steady_velocity_file_path')
+        ufile = cfg.steady_velocity_file_path;
     else
         ufile = sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,ti,tf,tind);
     end
@@ -182,6 +193,40 @@ for tind = 1:global_steps
     end
 end
 cfg.u = u_cell;
+
+
+
+%% Save and Visualize Velocity Field at Each Frame
+
+if ~cfg.only_post_processing
+    % --- First, find the global maximum speed across all frames for a consistent legend ---
+    fprintf('Calculating global speed range for consistent visualization...\n');
+    global_max_speed = 0;
+    n = cfg.true_size;
+    dim = 3;
+    for tind = 1:length(cfg.u)
+        u_interval_matrix = reshape(cfg.u{tind}, [prod(n) * dim, cfg.nt]);
+        for k = 1:cfg.nt
+            vel_frame = u_interval_matrix(:, k);
+            u_xyz = reshape(vel_frame, [prod(n), dim]);
+            speed_vec = sqrt(sum(u_xyz.^2, 2));
+            current_max_speed = max(speed_vec);
+            if current_max_speed > global_max_speed
+                global_max_speed = current_max_speed;
+            end
+        end
+    end
+    % If no motion is detected, set a default non-zero max speed to avoid errors with clim
+    if global_max_speed == 0
+        global_max_speed = 1.0;
+        fprintf('Global maximum speed was 0. Set to %.4f to avoid visualization errors.\n', global_max_speed);
+    else
+        fprintf('Global maximum speed is: %.4f\n', global_max_speed);
+    end
+    % --- Call the modular visualization function ---
+    visualize_velocity_field(cfg, global_max_speed);
+end
+
 
 %% Run GLAD post-processing
 
@@ -285,37 +330,6 @@ saveas(gcf, sprintf('%s/%s/%s_LagPe_E%02d_%02d.png',cfg.out_dir,cfg.outdir_s,cfg
 savefig(gcf, sprintf('%s/%s/%s_LagPe_E%02d_%02d.fig',cfg.out_dir,cfg.outdir_s,cfg.tag,cfg.first_time,cfg.last_time+cfg.time_jump)); 
 %
 
-
-%% Save and Visualize Velocity Field at Each Frame
-
-if ~cfg.only_post_processing
-    % --- First, find the global maximum speed across all frames for a consistent legend ---
-    fprintf('Calculating global speed range for consistent visualization...\n');
-    global_max_speed = 0;
-    n = cfg.true_size;
-    dim = 3;
-    for tind = 1:length(cfg.u)
-        u_interval_matrix = reshape(cfg.u{tind}, [prod(n) * dim, cfg.nt]);
-        for k = 1:cfg.nt
-            vel_frame = u_interval_matrix(:, k);
-            u_xyz = reshape(vel_frame, [prod(n), dim]);
-            speed_vec = sqrt(sum(u_xyz.^2, 2));
-            current_max_speed = max(speed_vec);
-            if current_max_speed > global_max_speed
-                global_max_speed = current_max_speed;
-            end
-        end
-    end
-    % If no motion is detected, set a default non-zero max speed to avoid errors with clim
-    if global_max_speed == 0
-        global_max_speed = 1.0;
-        fprintf('Global maximum speed was 0. Set to %.4f to avoid visualization errors.\n', global_max_speed);
-    else
-        fprintf('Global maximum speed is: %.4f\n', global_max_speed);
-    end
-    % --- Call the modular visualization function ---
-    visualize_velocity_field(cfg, global_max_speed);
-end
 
 %% Visualization of speed map (at integral + avearage part)
 

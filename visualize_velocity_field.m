@@ -25,13 +25,13 @@ strid = 4; % Stride: plot one vector every N voxels
 % If global_max_speed is zero (no motion), magnify_vel would be Inf.
 % Handle this by setting a small default, although the plotting loop will likely be skipped.
 if global_max_speed > 0
-    magnify_vel = 10 / global_max_speed; % Magnification factor for arrow length
+    base_magnify = 10 / global_max_speed; % base magnification factor (will be adjusted per-frame)
 else
-    magnify_vel = 1; % Default value, no magnification
+    base_magnify = 1; % Default value, no magnification
 end
 
 
-parfor tind = 1:length(cfg.u)
+for tind = 1:length(cfg.u)
     % Reshape the giant column vector into a (space*dim) x nt matrix
     u_interval_matrix = reshape(cfg.u{tind}, [prod(n) * dim, cfg.nt]);
     
@@ -60,7 +60,14 @@ parfor tind = 1:length(cfg.u)
         
         % --- 2. Create Visualization for the Current Frame ---
         fig = figure('Visible', 'off', 'Colormap', jet(256));
-        q = quiver3(x_grid, y_grid, z_grid, u_y_ds*magnify_vel, u_x_ds*magnify_vel, u_z_ds*magnify_vel, 'AutoScale', 'off');
+        % --- Improve arrow scaling: adapt per-frame so sparse sampling still shows vectors ---
+        local_max = max(mags(:));
+        % If local_max is tiny we amplify more; if large we cap amplification to avoid crazy arrows.
+        frame_magnify = base_magnify * ( (global_max_speed + eps) / (local_max + eps) );
+        frame_magnify = min(max(frame_magnify, 0.1), 200); % clamp to reasonable range
+        % Draw quiver with manual scaling (AutoScale off) and slightly thicker lines
+        q = quiver3(x_grid, y_grid, z_grid, u_y_ds * frame_magnify, u_x_ds * frame_magnify, u_z_ds * frame_magnify, 'AutoScale', 'off', 'LineWidth', 1);
+        set(q, 'MaxHeadSize', 1.0);
         hold on;
         % --- 3. Color arrows by magnitude (Robust Method) ---
         % Flatten the magnitudes of the vectors for coloring
@@ -68,8 +75,8 @@ parfor tind = 1:length(cfg.u)
         
         % Get the current colormap
         cmap = colormap;
-        % Normalize magnitudes to the range [0, 1] based on global max speed
-        C_normalized = C / global_max_speed;
+        % Normalize magnitudes to the range [0, 1] based on global max speed (safe with eps)
+        C_normalized = C / (global_max_speed + eps);
         C_normalized(C_normalized > 1) = 1; % Cap at max
         % Map normalized values to colormap indices
         color_indices = round(C_normalized * (size(cmap, 1) - 1)) + 1;
@@ -108,9 +115,11 @@ parfor tind = 1:length(cfg.u)
         hcb.Label.String = 'Speed (voxels/frame)';
         clim([0, global_max_speed]);
         set(gcf,'unit','normalized','position',[0.1, 0.1, 0.6, 0.7],'Color',[0.85,0.85,0.93], 'InvertHardcopy', 'off');
-        % Save the visualization
+        % Save the visualization (both PNG and .fig for later interactive inspection)
         png_filename = sprintf('%s/velocity_field_interval_%d_to_%d_frame_%02d.png', vis_dir, ti, tf, k);
+        fig_filename = sprintf('%s/velocity_field_interval_%d_to_%d_frame_%02d.fig', vis_dir, ti, tf, k);
         saveas(fig, png_filename);
+        savefig(fig, fig_filename);
         close(fig); % Close the figure to free up memory
     end
 end

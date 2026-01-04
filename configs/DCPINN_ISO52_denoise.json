@@ -29,7 +29,7 @@
   "GLAD_spfs": 5,
   "sl_tol": 0.5,
   
-  "GLAD_timestep_factor": 2.0,
+  "GLAD_timestep_factor": 8.0,
   "GLAD_visualize_mask": {
     "enable": false,
     "path": "/data/xym/DEX_MRI/ISO/Template_C57Bl6_n30_brain_ISO_52.nii",

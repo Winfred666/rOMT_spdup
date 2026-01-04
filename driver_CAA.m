@@ -25,8 +25,7 @@ end
 
 % resize mask, dx should magnify accordingly.
 if cfg.do_resize
-   cfg.msk = resizeMatrix(cfg.msk,round(cfg.size_factor.*size(cfg.msk)),'linear');
-   cfg.msk(cfg.msk~=1) = 0;
+   cfg.msk = resizeMatrix(cfg.msk,round(cfg.size_factor.*size(cfg.msk)),'nearest') > 0.5;
    cfg.msk_undilate = cfg.msk;
    cfg.dx = cfg.dx / cfg.size_factor; % spatial resolution in mm
 else
@@ -54,7 +53,7 @@ end
 
 
 
-% load vol
+% load concentration vol
 
 global_steps = (cfg.last_time-cfg.first_time)/cfg.time_jump+2;
 vol_tmp = cell(global_steps, 1);
@@ -154,15 +153,8 @@ for tind = 1:global_steps
     tf = cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump;
     if isfield(cfg, 'velocity_dir')
         fprintf("Loading from velocity dir!!!")
-        if ti >= 7 && tf <= 12
-            ufile = fullfile(cfg.velocity_dir, 'predict_velocity_7_12.mat');
-        elseif ti >= 12 && tf <= 18
-            ufile = fullfile(cfg.velocity_dir, 'predict_velocity_12_18.mat');
-        elseif ti >= 18
-            ufile = fullfile(cfg.velocity_dir, 'predict_velocity_18_27.mat');
-        else
-            error('No matching velocity file for current time range [%g, %g]', ti, tf);
-        end
+        
+        ufile = fullfile(cfg.velocity_dir, sprintf('velocity_sample_%04d.mat',floor((tind-1)/3)));
     elseif isfield(cfg, 'steady_velocity_file_path')
         ufile = cfg.steady_velocity_file_path;
     else
@@ -506,7 +498,10 @@ strid = cfg.strid;
 for ind = 1:strid:nSL
     SL_tmp = SL2{ind};
     colors = jet(size(SL_tmp,1));
+
+    % WARNING: SWAPING AXIS FOR PROPER ORIENTATION
     hlines = patch([SL_tmp(:,2);NaN],[SL_tmp(:,1);NaN],[SL_tmp(:,3);NaN],[1,1,1]);
+    
     %set(hlines,'EdgeColor',colors.round(PATH.displen(ind),:));
     set(hlines,'FaceVertexCData',[colors;colors(end,:)],'EdgeColor','flat','FaceColor','none');
 end

@@ -27,12 +27,18 @@ v_msk=spm_vol(lymph.msk);
 mask=spm_read_vols(v_msk);
 mask=mask>0.01;
 
+% defaults to avoid huge ratios and to allow zeroing negatives
+if ~isfield(lymph,'baseline_threshold'), lymph.baseline_threshold = 1e-6; end
+if ~isfield(lymph,'zero_negative_rel_change'), lymph.zero_negative_rel_change = true; end
+
 img_sum=zeros(size(img_bas));
 
 % --- Initialize vectors to store total signal change over time ---
 num_time_points = size(lymph.src_loc,1);
 total_absolute_change = zeros(num_time_points, 1);
 total_relative_change = zeros(num_time_points, 1);
+max_relative_change = 100;
+
 
 % --- PASS 1: Analyze all images to find the target mass ---
 disp('Pass 1: Analyzing signal change to find target mass...');
@@ -45,8 +51,21 @@ for FN=1:size(lymph.src_loc,1)
     total_absolute_change(FN) = sum(img_abs_change(mask));
 
     % Calculate relative change and its total sum (mass)
-    img_rel_change = (img - img_bas + eps) ./ (img_bas + eps) * 100;
+    % denom = img_bas;
+    % denom(denom < lymph.baseline_threshold) = lymph.baseline_threshold;
+    
+    denom = 100; % WARNING: ONLY DO SUBSTRACTION, NOT DIVISION.
+    
+    img_rel_change = (img - img_bas) ./ denom * 100;
+    
+    if lymph.zero_negative_rel_change
+        img_rel_change(img_rel_change < 0) = 0;   % set negative changes to zero
+    end
+
     total_relative_change(FN) = sum(img_rel_change(mask));
+    if max(img_rel_change(mask),[],"all") > max_relative_change
+        max_relative_change = max(img_rel_change(mask),[],"all");
+    end
 end
 
 % --- Determine the target mass from the analysis pass ---
@@ -63,7 +82,15 @@ for FN=1:size(lymph.src_loc,1)
     img = spm_read_vols(v);
 
     % Recalculate the relative change image
-    img_rel_change = (img - img_bas + eps) ./ (img_bas + eps) * 100;
+    % denom = img_bas;
+    % denom(denom < lymph.baseline_threshold) = lymph.baseline_threshold;
+    
+    denom = max_relative_change; % WARNING: ONLY DO SUBSTRACTION + NORMALIZATION, NOT DIVISION.
+
+    img_rel_change = (img - img_bas) ./ denom .* 100;
+    if lymph.zero_negative_rel_change
+        img_rel_change(img_rel_change < 0) = 0;
+    end
     
     % Get the current mass for this image (already computed)
     current_mass = total_relative_change(FN);
@@ -78,6 +105,11 @@ for FN=1:size(lymph.src_loc,1)
     % Apply the correction
     corrected_img = img_rel_change * correction_factor;
     
+    % ensure no negative values after scaling
+    if lymph.zero_negative_rel_change
+        corrected_img(corrected_img < 0) = 0;
+    end
+
     % Store the new total mass for the verification plot
     corrected_relative_change(FN) = sum(corrected_img(mask));
 
@@ -99,7 +131,7 @@ spm_write_vol(v,img_sum);
 
 % --- Create and Save Mass Conservation Plot ---
 disp('Generating and saving mass conservation plot...');
-time_points = 1:num_time_points;
+time_points = 3:(num_time_points+2);
 
 figure('Name', 'Mass Conservation Analysis', 'Visible', 'off');
 

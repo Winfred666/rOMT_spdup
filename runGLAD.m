@@ -34,13 +34,14 @@ if ~seed_mask_enable
     msk_brain = msk>cfg.ROI_msk_threshold; % use the whole mask
 else
     msk_brain = nii2mat(cfg.GLAD_visualize_mask.path,cfg.x_range,cfg.y_range,cfg.z_range);
-    msk_brain = msk_brain > cfg.GLAD_visualize_mask.threshold; % warning: in sp_mask, brain area is bigger than 1, however when now we set it as label mask.
+    msk_brain = msk_brain > cfg.GLAD_visualize_mask.threshold;
     if cfg.do_resize
-        msk_brain = resizeMatrix(double(msk_brain),round(cfg.size_factor.*size(msk_brain)),'linear');
-        msk_brain(msk_brain~=1) = 0; % make sure it is binary
+        % Use nearest to preserve labels; then threshold to binary
+        msk_brain = resizeMatrix(single(msk_brain), round(cfg.size_factor.*size(msk_brain)), 'nearest') > 0.5;
     end
-    cfg.msk_brain = msk_brain; % only for visualize and debug.
+    cfg.msk_brain = msk_brain;
 end
+
 
 if glacfg.do_sp
     data_max = zeros(size(cfg.vol(1).data));
@@ -51,6 +52,20 @@ if glacfg.do_sp
     % --- MODIFICATION: Use sp_thresh as an absolute threshold ---
     absolute_threshold = glacfg.sp_thresh;
     fprintf('Using absolute threshold for starting points: %.4f\n', absolute_threshold);
+
+
+    % diagnostics
+    fprintf('DEBUG: size(mskSP) = [%s], class = %s, nnz(mskSP>0) = %d\n', ...
+        num2str(size(mskSP)), class(mskSP), nnz(mskSP>0));
+    fprintf('DEBUG: size(data_max) = [%s], class = %s\n', num2str(size(data_max)), class(data_max));
+    fprintf('DEBUG: data_max min/median/max = %.6g / %.6g / %.6g\n', min(data_max(:)), median(data_max(:)), max(data_max(:)));
+    
+    % count voxels passing threshold & mask separately
+    n_maskvox = nnz(mskSP>0);
+    n_aboveth = nnz(data_max > absolute_threshold);
+    n_both = nnz( (mskSP>0) & (data_max > absolute_threshold) );
+    fprintf('DEBUG: voxels in mask = %d, voxels above threshold = %d, both = %d\n', n_maskvox, n_aboveth, n_both);
+
     mind = find((mskSP>0) & (data_max > absolute_threshold));
     glacfg.do_sp_str = sprintf('_data_min_abs_%.4f', glacfg.sp_thresh);
     % --- END MODIFICATION ---
@@ -416,6 +431,7 @@ rstream2 = RHO_SL(sl_euc>glacfg.sl_tol);
 dsstream2 = DSPD_SL(sl_euc>glacfg.sl_tol);
 pestream2 = PE_SL(sl_euc>glacfg.sl_tol);
 
+% WARNING: SWAPING AXES TO SELECT QUALIFIED PATHLINES
 fprintf(' # of start points = %d\n # of effective pathlines after pathline-number (pln) threshold = %d \n # of effective pathlines after Euclidean dist (sl_tol) threshold = %d\n',npoints,pli,length(SL2))
 pl_cur = cellfun(@(x) x(:,[2,1,3]),SL2,'UniformOutput',false);
 
@@ -607,13 +623,11 @@ ord = intersect([{'mask_name'} T.Properties.VariableNames], ...
 T = T(:, ord);
 
 % write CSV to cfg.out_dir
-csv_path = fullfile(cfg.out_dir, sprintf('%s_compartment_metrics_E%02d_%02d_%s_%s.csv', ...
-    cfg.tag, ti, tf+tj, paper_fig_str, date_str));
+csv_path = fullfile(cfg.out_dir, sprintf('%s_comp_metric_%02d_%02d_%s.csv', ...
+    cfg.tag, ti, tf+tj, date_str));
 writetable(T, csv_path);
 fprintf('Compartment metrics written to: %s\n', csv_path);
 fprintf("compute compartment metrics... done \n\n")
-
-%% v (compute flux vector, net displacement of each particle)
 
 outversion = sprintf('%s_%s',paper_fig_str,date_str);
 
@@ -663,7 +677,7 @@ anato = load_untouch_nii(cfg.anato);
 anato = anato.img(cfg.x_range,cfg.y_range,cfg.z_range);
 
 if cfg.do_resize
-   anato = resizeMatrix(anato,round(cfg.size_factor.*size(anato)),'linear');
+   anato = resizeMatrix(anato,round(cfg.size_factor.*size(anato)), 'nearest') > 0.5;
 end
 anato(~msk) = 0;
 anato(msk_brain==0) = 0;

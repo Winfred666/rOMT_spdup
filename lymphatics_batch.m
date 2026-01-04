@@ -5,22 +5,24 @@ addpath(genpath('./nii_preprocess'))
 % --- CONFIGURATION ---
 % Load parameters from the config file, after all preprocess, load psnr_... in set_config_CAA.m
 lymph = struct();
-lymph.run_Ns = [3,5,7]; % processing steps to run
+% WARNING: ADD 3 REALIGN ONLY IF MOUSE HEAD MOVING; ADD 5 ONLY IF TOO NOISY
+lymph.run_Ns = [7,]; % processing steps to run
+
 % Define directories for baseline and source files
-lymph.bas_loc_dir = '/data/xym/DEX_MRI/KX/KX_078/DCE_nii_baseline';
-lymph.src_loc_dir = '/data/xym/DEX_MRI/KX/KX_078/DCE_nii_data';
+lymph.bas_loc_dir = 'W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/DEXI_083/new_DCE_baseline';
+lymph.src_loc_dir = 'W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/DEXI_083/new_DCE';
 % mask for head(bigger) or brain(smaller), used in normalization range + percentage.
 % normaliz / percentage will scale all voxels based on the mask region.
-lymph.msk = '/data/xym/DEX_MRI/KX/Template_C57Bl6_n30_brain_KX_078.nii';
+lymph.msk = 'W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/DEXI_083/brain_mask.nii.gz';
 
 lymph.force_mass_conservation = false; % if force_mass_conservation, for all timestep mass will scale up to peak level
-lymph.smooth = 0.125 * 2; % smoothing kernel size in mm unit, 2-3 times the voxel size is recommended
+lymph.smooth = 0.125 * 0; % smoothing kernel size in mm unit, 2-3 times the voxel size is recommended
 
 % dst is only for some log files, WARNING: should select an empty folder!
 lymph.dst = './temp_output';
 lymph.print = 'n'; % visualize and print image.
 lymph.SL = 1; % slice number if want to print image after normalize + smooth
-
+lymph.current_prefix = '';
 
 % Helper function to get and unzip files from a directory
 function file_list = get_files_from_dir(dir_path)
@@ -81,6 +83,7 @@ for i = 1:length(lymph.run_Ns)
             fprintf('3. (Necessary) Realign images with the mean image (*r files*) \n' ); % a must, correct head motions
             lymph.src_loc = all_files;
             lymphatics_realign_image(lymph);
+            lymph.current_prefix = ['r' lymph.current_prefix];
         case {4}
             fprintf('4. Sum images \n' ); % only needed if want to created mean baseline image (however done in 7)
             lymph.src_loc = all_files;
@@ -92,9 +95,11 @@ for i = 1:length(lymph.run_Ns)
             % read the output from realigned images, adding 'r' to every filename in src_loc
             for j = 1:length(lymph.src_loc)
                 [fdir, fname] = fileparts(lymph.src_loc{j});
-                lymph.src_loc{j} = fullfile(fdir, ['r', fname, '.nii']);
+                
+                lymph.src_loc{j} = fullfile(fdir, [lymph.current_prefix, fname, '.nii']);
             end
             lymphatics_normalize_smooth_images(lymph);
+            lymph.current_prefix = ['sn' lymph.current_prefix];
         case {6}
             fprintf('6. Merge all the images to check normalization quality\n' );
             lymph.src_loc = all_files;
@@ -107,14 +112,14 @@ for i = 1:length(lymph.run_Ns)
             lymph.bas_loc = lymph.bas_loc_files;
             for j = 1:length(lymph.bas_loc)
                 [fdir, fname] = fileparts(lymph.bas_loc{j});
-                lymph.bas_loc{j} = fullfile(fdir, ['snr', fname, '.nii']);
+                lymph.bas_loc{j} = fullfile(fdir, [lymph.current_prefix, fname, '.nii']);
             end
 
             % Process source files
             lymph.src_loc = lymph.src_loc_files;
             for j = 1:length(lymph.src_loc)
                 [fdir, fname] = fileparts(lymph.src_loc{j});
-                lymph.src_loc{j} = fullfile(fdir, ['snr', fname, '.nii']);
+                lymph.src_loc{j} = fullfile(fdir, [lymph.current_prefix, fname, '.nii']);
             end
             
             lymphatics_percent_image(lymph);

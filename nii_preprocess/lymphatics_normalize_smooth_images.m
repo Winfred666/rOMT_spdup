@@ -1,13 +1,13 @@
 function lymphatics_normalize_smooth_images(lymph)
 
 %Delete the destination directory if it exists.
-if exist(lymph.dst,'dir')
-    CMD=['rm -rf ',lymph.dst];
-    system(CMD);
+if exist(lymph.dst, 'dir')
+    rmdir(lymph.dst, 's');  % 's' flag removes directory and all contents
 end
 
-CMD=['mkdir ',lymph.dst];
-[~,~]=system(CMD);
+% Create the destination directory
+mkdir(lymph.dst);
+
 
 % cd(lymph.dst);
 
@@ -17,7 +17,7 @@ img_msk=spm_read_vols(v_msk);
 img_msk=img_msk>0.01;
 
 for FN=1:size(lymph.src_loc,1)
-    clear fname v img img_scale mean_intensity img_norm tmp fname_out sfname_out SG;
+    clear fname v img img_scale mean_intensity max_intensity img_norm tmp fname_out sfname_out SG;
     % get the folder of src image
     fname=char(lymph.src_loc(FN));
     v=spm_vol(fname);
@@ -27,26 +27,31 @@ for FN=1:size(lymph.src_loc,1)
     affine_ratio = (v_msk.mat(1:3,1:3)+eps)./(v.mat(1:3,1:3)+eps);
     if all(abs(abs(affine_ratio(:)) - 1) < 1e-3)
         img_scale=img.*img_msk;
-        mean_intensity=mean(img_scale(img_scale>0));
-        img_norm=img/mean_intensity*1000; %normalize
+        mean_intensity = mean(img_scale(img_scale>0));
+        img_norm = img / mean_intensity * 100; %normalize by divide means.
         
+        % max_intensity = max(img_scale(img_scale>0));
+        % img_norm = img / max_intensity * 100; % normalize by divide maxs.
+
         %Normalize image and save
         [tmp.dir, tmp.fname]=fileparts(fname);
         
         fname_out=[tmp.dir,'/n',tmp.fname,'.nii'];
         v.fname=fname_out;
-        if exist(lymph.dst,'file')  % if the file already exists, delete it
-            system(['rm -f ', char(fname_out)]);
+        if exist(fname_out,'file')
+            delete(fname_out);
         end
-
+        
         spm_write_vol(v,img_norm);
         
         %Smooth the image and save again
         sfname_out=[tmp.dir,'/sn',tmp.fname,'.nii'];
         SG=[lymph.smooth lymph.smooth lymph.smooth];
         spm_smooth(fname_out,sfname_out,SG) % still save into src.
-
-        system(['rm -f ', char(fname_out)]); % only leave sfname_out
+        
+        if exist(fname_out,'file')
+            delete(fname_out);
+        end
 
         %Added on 03/20/17
         if strcmp(lymph.print,'y')
@@ -56,7 +61,10 @@ for FN=1:size(lymph.src_loc,1)
             img2d=squeeze(img(:,lymph.SL,:));
             img2d_norm=squeeze(img_norm(:,lymph.SL,:));
             
-            maxI1=max(img2d(img2d>0));minI1=maxI1*0.1;
+            minI1 = prctile(img2d(img2d>0), 1);
+            maxI1 = prctile(img2d(img2d>0), 99);
+
+            
             minI2=150;maxI2=2500;
             
             tmp.fname=strrep(tmp.fname,'_','-');
@@ -78,7 +86,7 @@ for FN=1:size(lymph.src_loc,1)
     
 end
 
-    save([lymph.dst,'/Normalization_info'],'lymph');
+save([lymph.dst,'/Normalization_info'],'lymph');
 
 
 end

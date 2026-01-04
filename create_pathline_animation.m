@@ -39,8 +39,11 @@ for i = 1:length(sp_thresh_range)
     fprintf('Processing sp_thresh = %d...\n', sp_thresh);
     
     % Filter pathlines based on the current intensity threshold
-    passed_thresh_mask = find((start_point_intensities > sp_thresh) & (cfg.msk_brain(start_indices_linear) > 0));
-    
+    if isfield(cfg, "msk_brain")
+        passed_thresh_mask = find((start_point_intensities > sp_thresh) & (cfg.msk_brain(start_indices_linear) > 0));
+    else
+        passed_thresh_mask = find(start_point_intensities > sp_thresh);
+    end
     % --- Visualization ---
     clf(fig); % Clear the current figure for the new plot
     set(fig, 'unit','normalized','position',[0.1, 0.1, 0.6, 0.7],'Color',[0.85,0.85,0.93], 'InvertHardcopy', 'off');

@@ -1,0 +1,62 @@
+{
+  "only_post_processing": true,
+  "steady_velocity_file_path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/advd_3d_optcase/velocity_PBS097_64_4_5.mat",
+  "velocity_dir": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/advd_3d_optcase",
+  "data_template": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/PBS097/new_DCE/pdce2base_%04d.nii",
+  "ROI_msk_path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/PBS097/brain_mask.nii.gz",
+  "x_range": [
+    1,
+    128
+  ],
+  "y_range": [
+    1,
+    160
+  ],
+  "z_range": [
+    1,
+    128
+  ],
+  "do_resize": true,
+  "size_factor": 0.5,
+  "dilate": 0,
+  "first_time": 3,
+  "time_jump": 1,
+  "last_time": 6,
+  "niter_pcg": [
+    600,
+    900
+  ],
+  "smooth": 2.0,
+  "exclude_frames": [ 30, 31 ],
+   
+   
+  "density_percent_thres": 4.0,
+  "sp_thresh": 4.0,
+  
+  "GLAD_spfs": 1,
+  "sl_tol": 0.0,
+   
+  
+  "GLAD_timestep_factor": 1.0,
+  "GLAD_visualize_mask": {
+    "enable": true,
+    "path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/PBS097/MCA_MASK_RIGHT.nii.gz",
+    "threshold": 0.01
+  },
+  "compartment_mask_list": [
+      {
+      "name": "whole_brain",
+      "path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/PBS097/brain_mask.nii.gz",
+      "threshold": 0.01
+      },
+      {
+      "name": "RIGHT",
+      "path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/PBS097/MCA_MASK_RIGHT.nii.gz",
+      "threshold": 0.01
+      },{
+      "name": "LEFT",
+      "path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/PBS097/MCA_MASK_LEFT.nii.gz",
+      "threshold": 0.01
+      }
+  ]
+}

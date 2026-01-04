@@ -2,7 +2,7 @@ function stats = compute_compartment_metrics(mask_opt, s_full, ds_full, Pe_full,
 % in GLAD, Compute avg s_full, ds_full, Pe_full and v-flux inside a specific mask.
 % mask_opt: struct with .nii path: 3D logical or numeric mask (same space as s_full/ds_full/Pe_full), threshold and name
 % s_full, ds_full, Pe_full: 3D maps from GLAD (already averaged over visits)
-% SL: cell array of pathlines in MATLAB grid coords [x(col), y(row), z], as in runGLAD
+% SL: cell array of pathlines in MATLAB grid coords [row(y), col(x), z]
 % cfg: struct with fields true_size (n) and dx (mm)
 % scount: optional visit count map (same size), improves "valid voxel" selection
 % do_print: optional, default true
@@ -10,8 +10,8 @@ function stats = compute_compartment_metrics(mask_opt, s_full, ds_full, Pe_full,
 mask = nii2mat(mask_opt.path, cfg.x_range, cfg.y_range, cfg.z_range);
 mask = mask > mask_opt.threshold;
 if cfg.do_resize
-    mask = resizeMatrix(double(mask),round(cfg.size_factor.*size(mask)),'linear');
-    mask(mask~=1) = 0; % make sure it is binary
+    % Preserve binary mask on resize
+    mask = resizeMatrix(single(mask), round(cfg.size_factor.*size(mask)), 'nearest') > 0.5;
 end
 
 if nargin < 8, do_print = true; end
@@ -46,16 +46,63 @@ end
 % v-flux inside mask (unique visited voxels within mask)
 visited_mask = false(n);
 for i = 1:numel(SL)
-    vxl = round(SL{i}); % [x, y, z] in grid units
+    vxl = SL{i}; % [row(y), col(x), z] in grid units
     if isempty(vxl), continue; end
-    vxl = unique(vxl, 'rows');
-    cols = max(1, min(vxl(:,1), n(2))); % x -> columns
-    rows = max(1, min(vxl(:,2), n(1))); % y -> rows
+    vxl = vxl(all(isfinite(vxl),2),:); % drop NaNs/Infs
+    vxl = round(vxl);
+
+    % swap back correctly: first column is rows (y), second is cols (x)
+    rows = max(1, min(vxl(:,1), n(1))); % y -> rows
+    cols = max(1, min(vxl(:,2), n(2))); % x -> cols
     slcs = max(1, min(vxl(:,3), n(3))); % z -> slices
+
     lin  = sub2ind(n, rows, cols, slcs);
     visited_mask(lin) = true;
 end
 visited_in_mask = visited_mask & mask;
+
+% Visualize three masks and block until closed
+try
+    fig = figure('Name', sprintf('Mask debug: %s', mask_opt.name), 'Color', [0.95 0.95 0.98]);
+    hold on;
+    [x, y, z] = meshgrid(1:n(2), 1:n(1), 1:n(3));
+
+    if isfield(cfg, 'msk') && isequal(size(cfg.msk), n)
+        mskfv = isosurface(x, y, z, cfg.msk, 0.5);
+        if ~isempty(mskfv.vertices)
+            p = patch(mskfv);
+            p.FaceColor = [0.2, 0.57, 0.2]; p.FaceAlpha = 0.08;
+            p.EdgeColor = [0.2, 0.57, 0.2]; p.EdgeAlpha = 0.0;
+        end
+    end
+
+    % Compartment mask (from mask_opt)
+    mskfv2 = isosurface(x, y, z, mask, 0.5);
+    if ~isempty(mskfv2.vertices)
+        p2 = patch(mskfv2);
+        p2.FaceColor = [0.57, 0.2, 0.2]; p2.FaceAlpha = 0.25;
+        p2.EdgeColor = [0.57, 0.2, 0.2]; p2.EdgeAlpha = 0.0;
+    end
+
+    % Plot visited_mask (not intersected) as requested
+    visfv = isosurface(x, y, z, visited_in_mask, 0.5);
+    if ~isempty(visfv.vertices)
+        p3 = patch(visfv);
+        p3.FaceColor = [0.2, 0.2, 0.57]; p3.FaceAlpha = 0.35;
+        p3.EdgeColor = [0.2, 0.2, 0.57]; p3.EdgeAlpha = 0.0;
+    end
+
+    % Axes/view styling
+    axis equal; axis tight; grid on;
+    if isfield(cfg, 'view_azi_elevation'), view(cfg.view_azi_elevation); end
+    if isfield(cfg, 'flip_z') && cfg.flip_z, set(gca, 'ZDir', 'reverse'); end
+    title(sprintf('Masks: background (green), compartment (red), visited (blue)\n%s', mask_opt.name), 'Interpreter', 'none');
+
+    waitfor(fig); % block until closed
+catch ME
+    warning(ME.identifier, '%s', ME.message);
+end
+
 stats.visited_voxel_count = nnz(visited_in_mask);
 stats.voxel_volume_mm3    = cfg.dx^3;
 stats.v_flux_mm3          = stats.visited_voxel_count * stats.voxel_volume_mm3;

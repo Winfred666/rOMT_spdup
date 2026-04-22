@@ -1,8 +1,9 @@
 {
   "only_post_processing": true,
+  "reinitR": 0,
 
-  "data_template": "/data/xym/DEX_MRI/DEXI/DEXI_083/new_DCE/pdce2base_%04d.nii",
-  "ROI_msk_path": "/data/xym/DEX_MRI/DEXI/DEXI_083/brain_mask.nii.gz",
+  "data_template": "/data/xym/DEX_MRI/DEXI/DEXI_083/DEXI_083_sim/9_10_samples.pt",
+  "ROI_msk_path": "/data/xym/DEX_MRI/DEXI/DEXI_084/brain_mask.nii.gz",
   "exclude_frames": [],
   
   "do_resize": false,
@@ -10,11 +11,13 @@
   
   "first_time": 9,
   "time_jump": 1,
-  "last_time": 25,
+  "last_time": 9,
 
-  "dt": 0.5,
-  "nt": 2,
+  "dt": 1.0,
+  "nt": 1,
   "dx": 0.03125,
+  "gamma": 0.00001,
+  "beta": 0.000002,
   
 
   "niter_pcg": [400, 900],
@@ -23,13 +26,11 @@
   "x_range": [1, 128],
   "y_range": [1, 160],
   "z_range": [1, 128],
-
-
-  "density_percent_thres": 4,
-  "sp_thresh": 4,
-  "GLAD_spfs": 36,
-  "sl_tol": 1.5,
   
+  "density_percent_thres": 0.10,
+  "sp_thresh": 0.10,
+  "GLAD_spfs": 40,
+  "sl_tol": 1.5,
 
   "GLAD_visualize_mask":{
       "enable": false,

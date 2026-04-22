@@ -2,7 +2,7 @@
   "only_post_processing": true,
   "velocity_dir":"W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/results/0103_ISO52speed",
   "steady_velocity_file_path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/results/0103_ISO52speed/velocity_sample_0000.mat",
-  "data_template": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/ISO_52/new_DCE/pdce2base_%04d.nii",
+  "data_template": "/data/xym/DEX_MRI/ISO/ISO_52/new_DCE/psnrT1_FLASH_3D_%04d.nii",
   "ROI_msk_path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/ISO_52/brain_mask.nii.gz",
   "//dti_path": "/data/xym/DTI_data/ISO 052/dicom/out_dwi/dti_aligned/dti_tensor.mat",
   "x_range": [
@@ -19,9 +19,9 @@
   ],
   "do_resize": false,
   "size_factor": 1.0,
-  "first_time": 7,
+  "first_time": 9,
   "time_jump": 1,
-  "last_time": 12,
+  "last_time": 25,
   "smooth": 1.8,
   
   "density_percent_thres": 15,
@@ -29,7 +29,7 @@
   "GLAD_spfs": 5,
   "sl_tol": 2.5,
   
-  "GLAD_timestep_factor": 1.5,
+  "GLAD_timestep_factor": 1.0,
   "GLAD_visualize_mask": {
     "enable": false,
     "path": "W:/My_CS/My_CS_IT/AILearning/deepsearch/MRI_PINO/data/dce_mri/ISO_52/brain_mask.nii.gz",

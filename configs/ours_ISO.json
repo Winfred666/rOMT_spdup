@@ -14,7 +14,10 @@
   
   "first_time": 9,
   "time_jump": 1,
-  "last_time": 26,
+  "last_time": 25,
+
+  "dt": 0.5,
+  "nt": 2,
   
   "smooth": 1.8,
   

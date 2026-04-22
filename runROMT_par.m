@@ -5,10 +5,16 @@ function [cfg,flag] = runROMT_par(cfg)
 % if has parpool, not allocate again
 
 num_iter = (cfg.last_time-cfg.first_time)/cfg.time_jump+2;
-if ~isempty(gcp('nocreate'))
-    num_iter = gcp().NumWorkers; % Get the number of workers in the current parallel pool (in case execute later)
+isWorkerContext = ~isempty(getCurrentTask());
+if ~isWorkerContext
+    if ~isempty(gcp('nocreate'))
+        pool = gcp();
+        fprintf('Using existing pool with %d workers.\n', pool.NumWorkers);
+    else
+        parpool(num_iter); % Or parpool(12), etc.
+    end
 else
-    parpool(num_iter); % Or parpool(12), etc.
+    fprintf('runROMT_par detected worker context; skipping parpool creation.\n');
 end
 
 
@@ -60,8 +66,65 @@ profile on
 clear T; T = 0;
 % remove the worker limit to leverage more cores
 global_steps = length(cfg.first_time:cfg.time_jump:cfg.last_time);
-% DEBUG: change parfor to for if any problem inside.
-parfor tind = 1:global_steps
+useParfor = ~isWorkerContext;
+if useParfor
+    % DEBUG: change parfor to for if any problem inside.
+    parfor tind = 1:global_steps
+        fprintf('tind = %d\n',tind)
+        tic
+        %{
+        if exist(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),'file')==2 && exist(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),'file') == 2        
+            rho_n = load(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind));
+            rho_n = rho_n.rho_n;
+            u = load(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind));
+            u = reshape(u.u,[],cfg.nt);
+            continue
+        end
+        %}
+        % must load from original data.
+        rho_0 = cfg.vol(tind).data(:);
+
+        %true final density
+        par = paramInitFunc(cfg);
+        par.drhoN     = cfg.vol(tind+1).data(:);
+        mask_single_t = kron(ones(par.dim, 1), cfg.msk(:));
+        mask_full     = repmat(mask_single_t, par.nt, 1);
+        par.mask_full       = mask_full; % we need to mask out gradient to prevent velocity field out side of brain
+        %par = paramInitFunc(true_size',nt,dt,sigma,add_source,gamma,beta,niter_pcg,dTri);
+        %par.drhoN     = rho_N(:);
+        
+        % must reinitialize u, cannot leverage last pass:
+        u = zeros(par.dim*prod(par.n),par.nt);%zeros(2*prod(par.n),par.nt);
+
+        %% Descent for u
+        fprintf('\n =============== Descent on u ===============\n')
+        fprintf('______________________________________________\n\n')
+        fprintf('i.lsiter\tphi    \t      descent output\n')
+        fprintf('________    ___________     __________________\n')
+        [u,~,~] = GNblock_u(rho_0,u,par.nt,par.dt,par, sprintf("f_%d_%d",cfg.first_time + tind*cfg.time_jump, cfg.first_time + (tind+1)*cfg.time_jump));
+        
+        [phi,mk,phiN,Ru, Rho]  = get_phi(rho_0,u,par);
+        % fprintf('________    ###########     __________________\n')
+        rho_n = Rho(:,end);
+        btoc = toc;
+        T = T + btoc;
+        % fprintf('########    ###########     __________________\n')
+        
+        dlmwrite(fname,[tind,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,phi,mk,Ru,phiN,max(u(:)),btoc],'-append');
+
+        % before saving velocity , still save in cell/min
+        
+        % WARNING: here save the velocity field (all our optimization results).
+        save_un(sprintf('%s/u0_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),u);
+        
+        % WARNING: the rhon field is GT rho, not the advect one.
+        save_rhon(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),rho_n);
+        
+        fprintf('tind = %d, max(u) = %5.4f\n',tind,max(u));
+    end
+else
+    fprintf('runROMT_par falling back to serial for-loop inside worker context.\n');
+    for tind = 1:global_steps
     fprintf('tind = %d\n',tind)
     tic
     %{
@@ -113,6 +176,7 @@ parfor tind = 1:global_steps
     save_rhon(sprintf('%s/rhoNe_%s_%d_%d_t_%d.mat',cfg.out_dir,cfg.tag,cfg.first_time+(tind-1)*cfg.time_jump,cfg.first_time+(tind-1)*cfg.time_jump+cfg.time_jump,tind),rho_n);
     
     fprintf('tind = %d, max(u) = %5.4f\n',tind,max(u));
+    end
 end
 
 fprintf('\n =============== rOMT Ends ===============\n')

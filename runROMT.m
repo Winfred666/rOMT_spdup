@@ -35,7 +35,7 @@ for tind = 1:length(cfg.first_time:cfg.time_jump:cfg.last_time)
         continue
     end
     %}
-    if cfg.reinitR
+    if cfg.reinitR % used the simulated concentration frame from last optimizations
         rho_0 = cfg.vol(tind).data(:);
     else
         rho_0 = rho_n(:);

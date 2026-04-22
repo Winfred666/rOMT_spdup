@@ -61,12 +61,24 @@ vol_tmp = cell(global_steps, 1);
 for i = 1:global_steps
     cur_frame = cfg.first_time+(i-1)*cfg.time_jump;
     fprintf('Loading frame %d', cur_frame);
-    % WARNING: change from 02d to 04d if for different dataloader.
-    if isfield(cfg, "matdata_template")
-        tmp = load(sprintf(cfg.matdata_template, cur_frame));
-        tmp = tmp.(cfg.matdata_fieldname);
+    if ~isfield(cfg, 'data_template') || isempty(cfg.data_template)
+        error('driver_CAA:MissingDataTemplate', 'cfg.data_template is missing or empty in config %s.', cfg.tag);
+    end
+    data_template = string(cfg.data_template);
+    if ~isscalar(data_template)
+        error('driver_CAA:InvalidDataTemplate', 'cfg.data_template must be a scalar string/char path template.');
+    end
+    data_path_template = char(data_template);
+    if contains(data_path_template, '%')
+        frame_path = sprintf(data_path_template, cur_frame);
     else
-        tmp = nii2mat(sprintf(cfg.data_template, cur_frame),cfg.x_range,cfg.y_range,cfg.z_range);
+        frame_path = data_path_template;
+    end
+    % WARNING: change from 02d to 04d if for different dataloader.
+    if endsWith(data_template, '.pt', 'IgnoreCase', true)
+        tmp = pt2mat(frame_path,cfg.x_range,cfg.y_range,cfg.z_range,1,30000,cur_frame);
+    else
+        tmp = nii2mat(frame_path,cfg.x_range,cfg.y_range,cfg.z_range);
     end
     if cfg.do_resize
        tmp = resizeMatrix(tmp,round(cfg.size_factor.*size(tmp)),'linear');
@@ -190,34 +202,8 @@ cfg.u = u_cell;
 
 %% Save and Visualize Velocity Field at Each Frame
 
-if ~cfg.only_post_processing
-    % --- First, find the global maximum speed across all frames for a consistent legend ---
-    fprintf('Calculating global speed range for consistent visualization...\n');
-    global_max_speed = 0;
-    n = cfg.true_size;
-    dim = 3;
-    for tind = 1:length(cfg.u)
-        u_interval_matrix = reshape(cfg.u{tind}, [prod(n) * dim, cfg.nt]);
-        for k = 1:cfg.nt
-            vel_frame = u_interval_matrix(:, k);
-            u_xyz = reshape(vel_frame, [prod(n), dim]);
-            speed_vec = sqrt(sum(u_xyz.^2, 2));
-            current_max_speed = max(speed_vec);
-            if current_max_speed > global_max_speed
-                global_max_speed = current_max_speed;
-            end
-        end
-    end
-    % If no motion is detected, set a default non-zero max speed to avoid errors with clim
-    if global_max_speed == 0
-        global_max_speed = 1.0;
-        fprintf('Global maximum speed was 0. Set to %.4f to avoid visualization errors.\n', global_max_speed);
-    else
-        fprintf('Global maximum speed is: %.4f\n', global_max_speed);
-    end
-    % --- Call the modular visualization function ---
-    visualize_velocity_field(cfg, global_max_speed);
-end
+fprintf('Visualizing raw velocity field values for all loaded intervals...\n');
+visualize_velocity_field(cfg, []);
 
 
 %% Run GLAD post-processing

@@ -7,7 +7,7 @@ function visualize_velocity_field(cfg, global_max_speed)
 %    cfg - Configuration struct containing all necessary parameters 
 %          (u, out_dir, true_size, strid, view_azi_elevation, etc.).
 %    global_max_speed - The maximum speed calculated across all time frames,
-%                       used for consistent color scaling in visualizations.
+%                       kept for backward compatibility (unused).
 
 fprintf('Saving and visualizing velocity fields...\n');
 vis_dir = fullfile(cfg.out_dir, 'velocity_field_visualizations');
@@ -18,17 +18,12 @@ end
 n = cfg.true_size;
 dim = 3;
 
-% Create a downsampled grid for quiver plot to avoid visual clutter
-strid = 4; % Stride: plot one vector every N voxels
+% Use the full grid for quiver plot (no voxel omission)
+strid = 2;
 [x_grid, y_grid, z_grid] = meshgrid(1:strid:n(2), 1:strid:n(1), 1:strid:n(3));
 
-% If global_max_speed is zero (no motion), magnify_vel would be Inf.
-% Handle this by setting a small default, although the plotting loop will likely be skipped.
-if global_max_speed > 0
-    base_magnify = 10 / global_max_speed; % base magnification factor (will be adjusted per-frame)
-else
-    base_magnify = 1; % Default value, no magnification
-end
+% Keep argument for backward compatibility but do not use global scaling.
+unused_global_max_speed = global_max_speed; %#ok<NASGU>
 
 
 for tind = 1:length(cfg.u)
@@ -50,7 +45,7 @@ for tind = 1:length(cfg.u)
         u_y = reshape(u_xyz(:,2), n);
         u_z = reshape(u_xyz(:,3), n);
         
-        % Downsample the vector fields for plotting
+    % Use full-resolution vector fields for plotting
         u_x_ds = u_x(1:strid:end, 1:strid:end, 1:strid:end);
         u_y_ds = u_y(1:strid:end, 1:strid:end, 1:strid:end);
         u_z_ds = u_z(1:strid:end, 1:strid:end, 1:strid:end);
@@ -60,13 +55,8 @@ for tind = 1:length(cfg.u)
         
         % --- 2. Create Visualization for the Current Frame ---
         fig = figure('Visible', 'off', 'Colormap', jet(256));
-        % --- Improve arrow scaling: adapt per-frame so sparse sampling still shows vectors ---
-        local_max = max(mags(:));
-        % If local_max is tiny we amplify more; if large we cap amplification to avoid crazy arrows.
-        frame_magnify = base_magnify * ( (global_max_speed + eps) / (local_max + eps) );
-        frame_magnify = min(max(frame_magnify, 0.1), 200); % clamp to reasonable range
-        % Draw quiver with manual scaling (AutoScale off) and slightly thicker lines
-        q = quiver3(x_grid, y_grid, z_grid, u_y_ds * frame_magnify, u_x_ds * frame_magnify, u_z_ds * frame_magnify, 'AutoScale', 'off', 'LineWidth', 1);
+    % Draw quiver with raw velocity values (no global scaling).
+    q = quiver3(x_grid, y_grid, z_grid, u_y_ds, u_x_ds, u_z_ds, 'AutoScale', 'off', 'LineWidth', 1);
         set(q, 'MaxHeadSize', 1.0);
         hold on;
         % --- 3. Color arrows by magnitude (Robust Method) ---
@@ -75,8 +65,9 @@ for tind = 1:length(cfg.u)
         
         % Get the current colormap
         cmap = colormap;
-        % Normalize magnitudes to the range [0, 1] based on global max speed (safe with eps)
-        C_normalized = C / (global_max_speed + eps);
+    % Normalize magnitudes to [0, 1] based on current frame max speed.
+    frame_max_speed = max(C);
+    C_normalized = C / (frame_max_speed + eps);
         C_normalized(C_normalized > 1) = 1; % Cap at max
         % Map normalized values to colormap indices
         color_indices = round(C_normalized * (size(cmap, 1) - 1)) + 1;
@@ -113,7 +104,7 @@ for tind = 1:length(cfg.u)
         % Add colorbar and set fixed limits
         hcb = colorbar;
         hcb.Label.String = 'Speed (voxels/frame)';
-        clim([0, global_max_speed]);
+    clim([0, frame_max_speed + eps]);
         set(gcf,'unit','normalized','position',[0.1, 0.1, 0.6, 0.7],'Color',[0.85,0.85,0.93], 'InvertHardcopy', 'off');
         % Save the visualization (both PNG and .fig for later interactive inspection)
         png_filename = sprintf('%s/velocity_field_interval_%d_to_%d_frame_%02d.png', vis_dir, ti, tf, k);

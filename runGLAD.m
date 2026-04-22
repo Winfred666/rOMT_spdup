@@ -153,9 +153,21 @@ for t1 = ti:tj:tf
     U = cfg.u{(t1-ti)/tj + 1};
     Uall(:,(t1-ti)/tj*nt+1:(t1-ti)/tj*nt+nt) = reshape(U,[],nt);
 end
+num_time_samples = size(Uall, 2);
 if glacfg.smoothv && glacfg.Svt>0 % smooth velocity field in time space
-    Uall = cell2mat(smoothn(num2cell(Uall',1),glacfg.Svt));
-    Uall = Uall';
+    if num_time_samples > 1
+        Uall_smoothed = smoothn(num2cell(Uall',1),glacfg.Svt);
+        if iscell(Uall_smoothed)
+            Uall = cell2mat(Uall_smoothed);
+        elseif isnumeric(Uall_smoothed)
+            Uall = Uall_smoothed;
+        else
+            error('runGLAD:InvalidSmoothnOutput', 'Unexpected smoothn output type: %s', class(Uall_smoothed));
+        end
+        Uall = Uall';
+    else
+        fprintf('Skipping temporal smoothing: only one velocity field/time sample is available.\n');
+    end
 end
 
 %% running pathlines
@@ -253,7 +265,10 @@ for t1 = ti:tj:tf
         
         switch glacfg.RD
             case {'D', 'R'}
-                d = reshape(RHO_t(:,t2+1),n); % Use t2+1 because RHO_t includes the initial state at column 1
+                % RHO_t usually stores [initial, sub-steps...], but for nt==1/no interpolation
+                % it can be a single column only. Clamp to available frame index.
+                rho_col = min(t2+1, size(RHO_t,2));
+                d = reshape(RHO_t(:,rho_col),n);
         end
         
         if glacfg.minIm0

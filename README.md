@@ -207,7 +207,7 @@ nt              % 关键：插值帧数，一般设置 nt > 1 以增加自由度
 
 % 如果MRI间隔为4分钟，确保nt*dt=4以获得分钟的时间分辨率
 
-gamma,beta  % loss 权重，不用动
+gamma,beta  % TV loss / kinetic energy regularization 权重
 reinitR,reInitializeU  % 重置而非使用上一次优化得到的密度/速度场。并行则都设置为 1， 30 min 可跑完；串行都设置 0， 5 hour 才跑完但得到速度更快更平滑；
 
 niter_pcg % 每次更新线性方程求解/优化更新的迭代次数，一个递增数组，当低次迭代失败时，会尝试更高迭代次数，一般只填入一个数字即可，如 [500]。
@@ -221,7 +221,7 @@ maxUiter  % 建议将 niter_pcg 调大，这样 maxUiter 设置 20 即可收敛
 若运行 ISO 配置的优化过程，则执行：
 
 ```sh
-matlab -nodisplay -nosplash -r "config_path='ours_ISO';run('driver_CAA.m')"
+matlab -nodisplay -nosplash -r "config_path='ours_DEXI084';run('driver_CAA.m')"
 ```
 
 其中 config_path 与配置的 json 文件名相同。

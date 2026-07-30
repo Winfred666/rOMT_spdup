@@ -27,7 +27,7 @@ cfg.z_range                 = 1:128;
 cfg.do_resize               = 1;
 cfg.size_factor             = 0.6;
 
-cfg.smooth                  = 1.8;      % diffusion smoothing time (multiple of dt)
+cfg.smooth                  = 0.0;      % diffusion smoothing time (multiple of dt)
 cfg.dilate                  = 0;        % dilation for domain exploration
 cfg.first_time              = 9;
 cfg.time_jump               = 1;
@@ -114,6 +114,17 @@ for k = 1:numel(range_fields)
     end
 end
 
+% Convert physical sigma to the unit-grid coefficient used by the solver.
+% The ROMT/GLAD diffusion terms operate on the discrete grid, so the physical
+% diffusivity must be scaled by dx^2 before it is passed downstream.
+if isfield(cfg, 'sigma') && ~isempty(cfg.sigma)
+    cfg.sigma = cfg.sigma / (cfg.dx^2);
+end
+
+% Force-disable smoothing regardless of JSON to ensure no implicit smoothing
+% is applied to loaded concentration data at runtime.
+cfg.smooth = 0.0;
+
 % Force dataset name
 cfg.dataset_name = 'CAA';
 cfg.anato                   = cfg.ROI_msk_path;
@@ -129,6 +140,10 @@ end
 % Optional: ensure exclude_frames exists
 if ~isfield(cfg, 'exclude_frames')
     cfg.exclude_frames = [];
+end
+
+if ~isfield(cfg, 'load_from_last')
+    cfg.load_from_last = false;
 end
 
 % Print brief confirmation

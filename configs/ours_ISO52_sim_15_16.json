@@ -1,0 +1,43 @@
+{
+  "only_post_processing": false,
+  "reinitR": 0,
+
+  "data_template": "/data/xym/DEX_MRI/ISO/ISO_52/ISO_52_sim/15_16_samples.pt",
+  "ROI_msk_path": "/data/xym/DEX_MRI/ISO/ISO_52/brain_mask.nii.gz",
+  "exclude_frames": [],
+
+  "do_resize": false,
+  "size_factor": 1.0,
+
+  "first_time": 15,
+  "time_jump": 1,
+  "last_time": 15,
+  "sigma": 0.0,
+
+  "dt": 0.25,
+  "nt": 4,
+  "dx": 0.03125,
+  "gamma": 0.000002,
+  "beta": 0.000001,
+
+  "niter_pcg": [400, 900],
+  "maxUiter": 15,
+  "load_from_last": true,
+
+  "x_range": [1, 128],
+  "y_range": [1, 160],
+  "z_range": [1, 128],
+
+  "density_percent_thres": 0.01,
+  "sp_thresh": 0.01,
+  "GLAD_spfs": 36,
+  "sl_tol": 1.0,
+
+  "GLAD_visualize_mask": {
+    "enable": false,
+    "path": "",
+    "threshold": 0.01
+  },
+
+  "compartment_mask_list": []
+}
